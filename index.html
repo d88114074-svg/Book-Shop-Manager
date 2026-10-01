@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#153e75">
+<title>Bookshop POS</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#172033;background:#f3f6fb}
+*{box-sizing:border-box}body{margin:0}header{background:#153e75;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding:0 14px}.panel{background:#fff;border:1px solid #dce4ef;border-radius:14px;padding:16px;margin-bottom:16px;box-shadow:0 2px 10px #0b254008}
+.hidden{display:none!important}.row{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.row>*{flex:1;min-width:140px}label{display:block;font-size:13px;font-weight:650;margin:9px 0 5px}input,select,button{font:inherit;border-radius:9px;padding:10px;border:1px solid #cbd5e1;width:100%;background:white}button{cursor:pointer;font-weight:650;background:#153e75;color:white;border-color:#153e75}button.secondary{background:#fff;color:#153e75}button.danger{background:#a12424;border-color:#a12424}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto}.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.tabs button{width:auto}.tabs button.active{background:#0d9488;border-color:#0d9488}.notice{padding:10px 12px;border-radius:9px;margin:10px 0;background:#e0f2fe;color:#075985}.error{background:#fee2e2;color:#991b1b}.success{background:#dcfce7;color:#166534}.muted{color:#64748b;font-size:13px}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:9px;border-bottom:1px solid #e2e8f0;white-space:nowrap}th{background:#f8fafc}.num{text-align:right}.total{font-size:23px;font-weight:800}.cart-controls{display:flex;gap:6px;align-items:center}.cart-controls button{width:34px;padding:6px}.cart-controls input{width:62px;padding:6px}.statgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.stat{background:#f8fafc;border:1px solid #e2e8f0;padding:12px;border-radius:10px}.stat strong{display:block;font-size:20px}.login{max-width:440px;margin:7vh auto}.small{font-size:12px}.footer{padding:18px;text-align:center;color:#64748b}
+@media(min-width:850px){.posgrid{display:grid;grid-template-columns:1.2fr .8fr;gap:16px;align-items:start}}
+@media print{
+ @page{size:80mm auto;margin:3mm}
+ body{background:white!important;color:#000!important;font-family:monospace}
+ body *{visibility:hidden!important}
+ #receipt,#receipt *{visibility:visible!important}
+ #receipt{display:block!important;position:absolute;left:0;top:0;width:74mm;padding:0;margin:0;border:0;font-size:11px}
+ #receipt h2{text-align:center;font-size:15px;margin:3px 0}
+ #receipt .center{text-align:center}
+ #receipt table{font-size:10px;width:100%}
+ #receipt th,#receipt td{padding:2px 0;border:0;white-space:normal}
+ #receipt .line{border-top:1px dashed #000;margin:5px 0}
+ .no-print{display:none!important}
+}
+</style>
+</head>
+<body>
+<header><h1>📚 Bookshop POS</h1><div id="sessionInfo" class="small">Not signed in</div></header>
+<main>
+<section id="loginPanel" class="panel login">
+<h2>Sign in</h2><p class="muted">Use the account created for you by the bookshop administrator.</p>
+<form id="loginForm">
+<label>Email</label><input id="email" type="email" autocomplete="username" required>
+<label>Password</label><input id="password" type="password" autocomplete="current-password" required>
+<div style="margin-top:14px"><button type="submit">Sign in</button></div>
+</form><div id="loginMsg" aria-live="polite"></div>
+</section>
+<section id="appPanel" class="hidden">
+<div class="panel no-print">
+<div class="row"><div><strong id="welcome"></strong><div class="muted">Connected to your online bookshop database</div></div><div style="flex:0 0 130px"><button id="logoutBtn" class="secondary">Sign out</button></div></div>
+</div>
+<div class="tabs no-print" id="tabs">
+<button data-tab="sales" class="active">Sales / Billing</button>
+<button data-tab="inventory" id="inventoryTab">Book inventory</button>
+<button data-tab="history">Sales history</button>
+</div>
+<div id="globalMsg" aria-live="polite"></div>
+<section id="salesView">
+<div class="posgrid">
+<div class="panel no-print">
+<h2>Find books</h2>
+<label>Scan barcode or search by title / ISBN</label>
+<div class="row"><input id="bookSearch" placeholder="Scan barcode, then press Enter" autocomplete="off"><button id="searchBtn" style="flex:0 0 110px">Search</button></div>
+<p class="muted">Most USB/Bluetooth barcode scanners act like a keyboard and send Enter after scanning. Tap this box before scanning.</p>
+<div id="searchResults" class="table-wrap"></div>
+</div>
+<div class="panel">
+<h2>Current bill</h2><div id="cartArea"></div>
+<div class="row"><div><label>Cash received (LKR)</label><input id="cashReceived" type="number" min="0" step="0.01" placeholder="0.00"></div><div><label>Change (LKR)</label><div class="total" id="changeDue">0.00</div></div></div>
+<div class="statgrid"><div class="stat"><span class="muted">Total (LKR)</span><strong id="billTotal">0.00</strong></div><div class="stat"><span class="muted">Items</span><strong id="itemCount">0</strong></div></div>
+<div class="actions no-print" style="margin-top:12px"><button id="completeSaleBtn">Complete sale & issue bill</button><button id="clearCartBtn" class="secondary">Clear bill</button></div>
+<p class="muted">A sale is saved online and stock is reduced only after the transaction succeeds.</p>
+</div>
+</div>
+</section>
+<section id="inventoryView" class="hidden">
+<div class="panel no-print" id="productFormPanel">
+<h2 id="productFormTitle">Add a book</h2>
+<form id="productForm">
+<input type="hidden" id="productId">
+<div class="row"><div><label>Book title *</label><input id="pTitle" required maxlength="180"></div><div><label>ISBN / Barcode *</label><input id="pBarcode" required maxlength="80"></div></div>
+<div class="row"><div><label>Author</label><input id="pAuthor" maxlength="120"></div><div><label>Category</label><input id="pCategory" maxlength="80"></div></div>
+<div class="row"><div><label>Selling price (LKR) *</label><input id="pPrice" type="number" min="0" step="0.01" required></div><div><label>Purchase cost (LKR)</label><input id="pCost" type="number" min="0" step="0.01" value="0"></div><div><label>Opening / stock quantity *</label><input id="pStock" type="number" min="0" step="1" required></div></div>
+<div class="actions" style="margin-top:12px"><button type="submit">Save book</button><button type="button" id="cancelEditBtn" class="secondary">Cancel edit</button></div>
+</form>
+</div>
+<div class="panel"><div class="row"><div><h2>Inventory</h2></div><div><input id="inventorySearch" placeholder="Filter title or barcode"></div><div style="flex:0 0 130px"><button id="refreshInventoryBtn" class="secondary">Refresh</button></div></div><div id="inventoryTable" class="table-wrap"></div></div>
+</section>
+<section id="historyView" class="hidden">
+<div class="panel"><div class="row"><div><h2>Sales history</h2><div class="muted">Latest sales first. Cashiers can view completed bills.</div></div><div><label>From date</label><input type="date" id="historyFrom"></div><div><label>To date</label><input type="date" id="historyTo"></div><div style="flex:0 0 110px"><button id="refreshHistoryBtn" class="secondary">Refresh</button></div></div><div id="historyTable" class="table-wrap"></div></div>
+</section>
+</section>
+</main>
+<div id="receipt" class="hidden"></div>
+<div class="footer no-print">Bookshop POS · Keep regular database backups.</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-auth.js";
+import { getFirestore, collection, doc, getDoc, getDocs, query, orderBy, limit, where, runTransaction, serverTimestamp, setDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore.js";
+
+/* 1. Replace these values with your Firebase project's web-app configuration. */
+const firebaseConfig = {
+  apiKey: "AIzaSyAJPYr_l4YctevK2QB83EJFayYkLlMCtQE",
+  authDomain: "book-shop-manager.firebaseapp.com",
+  projectId: "book-shop-manager",
+  storageBucket: "book-shop-manager.firebasestorage.app",
+  messagingSenderId: "49748401310",
+  appId: "1:49748401310:web:dd81beee9a46a2a2342f8f",
+  measurementId: "G-Y18V1F1CJY"
+};
+
+const $ = id => document.getElementById(id);
+const loginPanel=$("loginPanel"), appPanel=$("appPanel");
+let auth, db, currentUser=null, currentRole=null, products=[], cart=[], lastSale=null;
+const money=n=>(Number(n)||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function message(text,type="notice"){const el=$("globalMsg");el.className="notice "+(type==="error"?"error":type==="success"?"success":"");el.textContent=text;setTimeout(()=>{if(el.textContent===text)el.textContent=""},6500)}
+function showLoginMsg(t,isError=true){$("loginMsg").className="notice "+(isError?"error":"success");$("loginMsg").textContent=t}
+function initFirebase(){
+ if(firebaseConfig.apiKey.startsWith("PASTE_")) throw new Error("Firebase is not configured yet. Follow SETUP.md and paste your Firebase web configuration into index.html.");
+ const app=initializeApp(firebaseConfig);auth=getAuth(app);db=getFirestore(app);
+ onAuthStateChanged(auth,async user=>{
+   currentUser=user;currentRole=null;
+   if(!user){loginPanel.classList.remove("hidden");appPanel.classList.add("hidden");$("sessionInfo").textContent="Not signed in";return}
+   alert("Firebase login successful!");
+  try{
+     const roleSnap=await getDoc(doc(db,"users",user.uid));
+     if(!roleSnap.exists()||!["admin","cashier"].includes(roleSnap.data().role)){await signOut(auth);showLoginMsg("This account has no assigned role. Ask the admin to configure the user role.");return}
+     currentRole=roleSnap.data().role;
+     loginPanel.classList.add("hidden");appPanel.classList.remove("hidden");
+     $("sessionInfo").textContent=user.email+" · "+currentRole;
+     $("welcome").textContent="Signed in as "+user.email+" ("+currentRole+")";
+     $("inventoryTab").classList.toggle("hidden",currentRole!=="admin");
+     await loadProducts();renderCart();await loadHistory();
+   }catch(e){message("Sign-in setup error: "+e.message,"error")}
+ });
+}
+$("loginForm").addEventListener("submit",async e=>{e.preventDefault();try{if(!auth)initFirebase();await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value)}catch(err){showLoginMsg(err.message||"Sign-in failed") }});
+$("logoutBtn").onclick=()=>signOut(auth);
+try{initFirebase()}catch(e){showLoginMsg(e.message);}
+
+function switchTab(tab){
+ for(const b of document.querySelectorAll("[data-tab]"))b.classList.toggle("active",b.dataset.tab===tab);
+ $("salesView").classList.toggle("hidden",tab!=="sales");$("inventoryView").classList.toggle("hidden",tab!=="inventory");$("historyView").classList.toggle("hidden",tab!=="history");
+ if(tab==="inventory"&&currentRole!=="admin"){message("Admin access required.","error");switchTab("sales");return}
+ if(tab==="inventory")renderInventory();if(tab==="history")loadHistory();
+}
+document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+
+async function loadProducts(){
+ const snap=await getDocs(collection(db,"products"));
+ products=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.title||"").localeCompare(b.title||""));
+ renderInventory();
+}
+function renderInventory(){
+ const term=($("inventorySearch").value||"").toLowerCase();
+ const rows=products.filter(p=>(p.title+" "+p.barcode+" "+(p.author||"")).toLowerCase().includes(term));
+ $("inventoryTable").innerHTML=rows.length?`<table><thead><tr><th>Title</th><th>Barcode / ISBN</th><th>Price</th><th>Stock</th><th class="no-print">Actions</th></tr></thead><tbody>${rows.map(p=>`<tr><td>${esc(p.title)}<div class="muted">${esc(p.author||"")}</div></td><td>${esc(p.barcode)}</td><td>${money(p.price)}</td><td>${Number(p.stock)||0}</td><td class="no-print"><div class="actions"><button class="secondary" data-edit="${esc(p.id)}">Edit</button><button class="danger" data-delete="${esc(p.id)}">Delete</button></div></td></tr>`).join("")}</tbody></table>`:"<p>No books found.</p>";
+ $("inventoryTable").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editProduct(b.dataset.edit));
+ $("inventoryTable").querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>removeProduct(b.dataset.delete));
+}
+$("inventorySearch").addEventListener("input",renderInventory);
+$("refreshInventoryBtn").onclick=async()=>{try{await loadProducts();message("Inventory refreshed.","success")}catch(e){message(e.message,"error")}};
+
+$("productForm").addEventListener("submit",async e=>{
+ e.preventDefault();if(currentRole!=="admin")return message("Admin access required.","error");
+ const id=$("productId").value,barcode=$("pBarcode").value.trim();
+ const item={title:$("pTitle").value.trim(),barcode,author:$("pAuthor").value.trim(),category:$("pCategory").value.trim(),price:Number($("pPrice").value),cost:Number($("pCost").value||0),stock:Number($("pStock").value),updatedAt:serverTimestamp(),updatedBy:currentUser.uid};
+ if(!item.title||!barcode||!Number.isFinite(item.price)||item.price<0||!Number.isInteger(item.stock)||item.stock<0||item.cost<0)return message("Check title, barcode, price, cost, and stock values.","error");
+ try{
+   const duplicate=products.find(p=>p.barcode===barcode&&p.id!==id);if(duplicate)return message("That barcode is already used by another book.","error");
+   if(id){await updateDoc(doc(db,"products",id),item)}else{item.createdAt=serverTimestamp();item.createdBy=currentUser.uid;await setDoc(doc(db,"products",crypto.randomUUID()),item)}
+   resetProductForm();await loadProducts();message("Book saved.","success");
+ }catch(err){message("Could not save book: "+err.message,"error")}
+});
+function editProduct(id){const p=products.find(x=>x.id===id);if(!p)return;$("productId").value=p.id;$("pTitle").value=p.title||"";$("pBarcode").value=p.barcode||"";$("pAuthor").value=p.author||"";$("pCategory").value=p.category||"";$("pPrice").value=p.price??0;$("pCost").value=p.cost??0;$("pStock").value=p.stock??0;$("productFormTitle").textContent="Edit book";$("productFormPanel").scrollIntoView({behavior:"smooth"})}
+function resetProductForm(){$("productForm").reset();$("productId").value="";$("pCost").value="0";$("productFormTitle").textContent="Add a book"}
+$("cancelEditBtn").onclick=resetProductForm;
+async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!confirm(`Delete "${p.title}" from inventory? Past sales remain in history.`))return;try{await deleteDoc(doc(db,"products",id));await loadProducts();message("Book deleted.","success")}catch(e){message(e.message,"error")}}
+
+async function searchBooks(){
+ const term=$("bookSearch").value.trim().toLowerCase();if(!term)return;
+ try{await loadProducts();let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
+ if(!matches.length)matches=products.filter(p=>(p.title+" "+(p.author||"")+" "+p.barcode).toLowerCase().includes(term)).slice(0,20);
+ $("searchResults").innerHTML=matches.length?`<table><thead><tr><th>Book</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>${matches.map(p=>`<tr><td>${esc(p.title)}<div class="muted">${esc(p.barcode)}</div></td><td>${money(p.price)}</td><td>${Number(p.stock)||0}</td><td><button data-add="${esc(p.id)}" ${Number(p.stock)<=0?"disabled":""}>Add</button></td></tr>`).join("")}</tbody></table>`:"<p>No matching books.</p>";
+ $("searchResults").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addToCart(b.dataset.add));
+ const exact=matches.find(p=>String(p.barcode).toLowerCase()===term);if(exact&&Number(exact.stock)>0){addToCart(exact.id);$("bookSearch").value="";$("searchResults").innerHTML=""}
+ }catch(e){message("Search failed: "+e.message,"error")}
+}
+$("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchBooks()}});
+function addToCart(id){const p=products.find(x=>x.id===id);if(!p)return;const line=cart.find(x=>x.id===id);const qty=(line?.qty||0)+1;if(qty>Number(p.stock))return message("Not enough stock available.","error");if(line)line.qty=qty;else cart.push({id:p.id,title:p.title,barcode:p.barcode,price:Number(p.price),qty:1});renderCart()}
+function renderCart(){
+ const total=cart.reduce((s,x)=>s+x.price*x.qty,0),count=cart.reduce((s,x)=>s+x.qty,0);
+ $("cartArea").innerHTML=cart.length?`<div class="table-wrap"><table><thead><tr><th>Item</th><th>Qty</th><th class="num">Amount</th><th></th></tr></thead><tbody>${cart.map(x=>`<tr><td>${esc(x.title)}<div class="muted">${money(x.price)} each</div></td><td><div class="cart-controls"><button data-minus="${esc(x.id)}">−</button><span>${x.qty}</span><button data-plus="${esc(x.id)}">+</button></div></td><td class="num">${money(x.price*x.qty)}</td><td><button class="danger" data-remove="${esc(x.id)}">×</button></td></tr>`).join("")}</tbody></table></div>`:"<p class='muted'>No items added yet.</p>";
+ $("cartArea").querySelectorAll("[data-minus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
+ $("cartArea").querySelectorAll("[data-plus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
+ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{cart=cart.filter(x=>x.id!==b.dataset.remove);renderCart()});
+ $("billTotal").textContent=money(total);$("itemCount").textContent=count;updateChange();
+}
+function changeQty(id,delta){const line=cart.find(x=>x.id===id),p=products.find(x=>x.id===id);if(!line)return;const n=line.qty+delta;if(n<=0)cart=cart.filter(x=>x.id!==id);else if(n>Number(p?.stock||0))return message("Not enough stock available.","error");else line.qty=n;renderCart()}
+function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
+$("cashReceived").addEventListener("input",updateChange);
+$("clearCartBtn").onclick=()=>{cart=[];$("cashReceived").value="";renderCart()};
+
+$("completeSaleBtn").onclick=async()=>{
+ if(!cart.length)return message("Add at least one book first.","error");
+ const total=Number(cart.reduce((s,x)=>s+x.price*x.qty,0).toFixed(2)),cash=Number($("cashReceived").value);
+ if(!Number.isFinite(cash)||cash<total)return message("Cash received must be equal to or greater than the bill total.","error");
+ if(!confirm(`Complete sale for LKR ${money(total)}?`))return;
+ const lines=cart.map(x=>({...x,amount:Number((x.price*x.qty).toFixed(2))}));
+ try{
+  const saleRef=doc(collection(db,"sales"));
+  await runTransaction(db,async tx=>{
+    const fresh=[];
+    for(const line of lines){const ref=doc(db,"products",line.id);const snap=await tx.get(ref);if(!snap.exists())throw new Error(`Book "${line.title}" no longer exists.`);const data=snap.data();if(Number(data.stock)<line.qty)throw new Error(`Insufficient stock for "${data.title}". Refresh inventory and try again.`);fresh.push({ref,data,line})}
+    for(const x of fresh)tx.update(x.ref,{stock:Number(x.data.stock)-x.line.qty,updatedAt:serverTimestamp()});
+    tx.set(saleRef,{billNo:"BS-"+saleRef.id.slice(0,8).toUpperCase(),items:lines.map(({id,title,barcode,price,qty,amount})=>({productId:id,title,barcode,price,qty,amount})),total,cashReceived:Number(cash.toFixed(2)),change:Number((cash-total).toFixed(2)),cashierUid:currentUser.uid,cashierEmail:currentUser.email,createdAt:serverTimestamp(),createdAtLocal:new Date().toISOString()});
+  });
+  const saleSnap=await getDoc(saleRef);lastSale={id:saleRef.id,...saleSnap.data()};await loadProducts();cart=[];$("cashReceived").value="";renderCart();buildReceipt(lastSale);message("Sale saved successfully. Use Print receipt to issue the bill.","success");showReceiptActions();
+ }catch(e){message("Sale not completed: "+e.message,"error")}
+};
+function buildReceipt(s){
+ const date=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.createdAtLocal||Date.now());
+ $("receipt").innerHTML=`<h2>BOOKSHOP</h2><div class="center">Sales receipt</div><div class="line"></div><div>Bill: ${esc(s.billNo)}</div><div>Date: ${esc(date.toLocaleString())}</div><div>Cashier: ${esc(s.cashierEmail||"")}</div><div class="line"></div><table><thead><tr><th>Item</th><th>Qty</th><th class="num">Amt</th></tr></thead><tbody>${s.items.map(i=>`<tr><td>${esc(i.title)}<br>${money(i.price)} each</td><td>${i.qty}</td><td class="num">${money(i.amount)}</td></tr>`).join("")}</tbody></table><div class="line"></div><table><tr><td><strong>TOTAL</strong></td><td class="num"><strong>LKR ${money(s.total)}</strong></td></tr><tr><td>Cash</td><td class="num">${money(s.cashReceived)}</td></tr><tr><td>Change</td><td class="num">${money(s.change)}</td></tr></table><div class="line"></div><div class="center">Thank you. Come again!</div><div class="center small">Computer-generated receipt</div>`;
+ $("receipt").classList.remove("hidden");
+}
+function showReceiptActions(){
+ const panel=document.createElement("div");panel.className="panel no-print";panel.id="receiptActions";panel.innerHTML='<strong>Sale completed.</strong><p>Print the receipt on your thermal printer.</p><div class="actions"><button id="printReceiptBtn">Print receipt</button><button id="dismissReceiptBtn" class="secondary">Close receipt preview</button></div>';
+ const old=$("receiptActions");if(old)old.remove();$("salesView").prepend(panel);
+ $("printReceiptBtn").onclick=()=>window.print();$("dismissReceiptBtn").onclick=()=>{panel.remove();$("receipt").classList.add("hidden")};
+}
+async function loadHistory(){
+ if(!db||!currentUser)return;
+ try{
+  const q=query(collection(db,"sales"),orderBy("createdAt","desc"),limit(300));const snap=await getDocs(q);
+  let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+  const from=$("historyFrom").value,to=$("historyTo").value;
+  if(from)rows=rows.filter(s=>(s.createdAtLocal||"").slice(0,10)>=from);
+  if(to)rows=rows.filter(s=>(s.createdAtLocal||"").slice(0,10)<=to);
+  $("historyTable").innerHTML=rows.length?`<table><thead><tr><th>Bill</th><th>Date</th><th>Cashier</th><th>Items</th><th>Total (LKR)</th><th></th></tr></thead><tbody>${rows.map(s=>`<tr><td>${esc(s.billNo||s.id)}</td><td>${esc(s.createdAtLocal?new Date(s.createdAtLocal).toLocaleString():(s.createdAt?.toDate?s.createdAt.toDate().toLocaleString():""))}</td><td>${esc(s.cashierEmail||"")}</td><td>${(s.items||[]).reduce((n,x)=>n+Number(x.qty||0),0)}</td><td>${money(s.total)}</td><td><button class="secondary" data-reprint="${esc(s.id)}">Receipt</button></td></tr>`).join("")}</tbody></table>`:"<p>No sales found for this date range.</p>";
+  $("historyTable").querySelectorAll("[data-reprint]").forEach(b=>b.onclick=()=>{const s=rows.find(x=>x.id===b.dataset.reprint);if(s){lastSale=s;buildReceipt(s);showReceiptActions();window.scrollTo({top:0,behavior:"smooth"})}});
+ }catch(e){$("historyTable").innerHTML="<p>Could not load sales history. Check Firestore rules and internet connection.</p>";message("Sales history: "+e.message,"error")}
+}
+$("refreshHistoryBtn").onclick=loadHistory;
+</script>
+</body>
+</html>
