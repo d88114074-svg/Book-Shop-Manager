@@ -217,9 +217,10 @@ async function addToCart(id){
      price:Number(p.price),
      qty:1
    });
-
-   p.stock=Number(p.stock||0)-1;
-   renderCart();
+p.stock=Number(p.stock||0)-1;
+renderCart();
+message("Stock reduced. New stock: "+p.stock,"success");
+   
 
  }catch(e){
    message("Could not reserve stock: "+e.message,"error");
