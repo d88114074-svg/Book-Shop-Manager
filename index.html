@@ -217,9 +217,14 @@ async function addToCart(id){
      price:Number(p.price),
      qty:1
    });
+
 p.stock=Number(p.stock||0)-1;
+
+const stockCell=document.querySelector(`[data-stock="${id}"]`);
+if(stockCell)stockCell.textContent=p.stock;
+
 renderCart();
-message("Stock reduced. New stock: "+p.stock,"success");
+  message("Stock reduced. New stock: "+p.stock,"success");
    
 
  }catch(e){
