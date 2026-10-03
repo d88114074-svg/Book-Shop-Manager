@@ -181,19 +181,168 @@ async function searchBooks(){
  }catch(e){message("Search failed: "+e.message,"error")}
 }
 $("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchBooks()}});
-function addToCart(id){const p=products.find(x=>x.id===id);if(!p)return;const line=cart.find(x=>x.id===id);const qty=(line?.qty||0)+1;if(qty>Number(p.stock))return message("Not enough stock available.","error");if(line)line.qty=qty;else cart.push({id:p.id,title:p.title,barcode:p.barcode,price:Number(p.price),qty:1});renderCart()}
-function renderCart(){
+async function addToCart(id){
+ const p=products.find(x=>x.id===id);
+ if(!p)return;
+
+ const line=cart.find(x=>x.id===id);
+ const qty=(line?.qty||0)+1;
+
+ if(qty>Number(p.stock||0))
+   return message("Not enough stock available.","error");
+
+ try{
+   const ref=doc(db,"products",id);
+
+   await runTransaction(db,async tx=>{
+     const snap=await tx.get(ref);
+     if(!snap.exists())throw new Error("Item no longer exists.");
+
+     const currentStock=Number(snap.data().stock||0);
+
+     if(currentStock<=0)
+       throw new Error("No stock available.");
+
+     tx.update(ref,{
+       stock:currentStock-1,
+       updatedAt:serverTimestamp()
+     });
+   });
+
+   if(line)line.qty=qty;
+   else cart.push({
+     id:p.id,
+     title:p.title,
+     barcode:p.barcode,
+     price:Number(p.price),
+     qty:1
+   });
+
+   p.stock=Number(p.stock||0)-1;
+   renderCart();
+
+ }catch(e){
+   message("Could not reserve stock: "+e.message,"error");
+ }
+}
+ function renderCart(){
  const total=cart.reduce((s,x)=>s+x.price*x.qty,0),count=cart.reduce((s,x)=>s+x.qty,0);
  $("cartArea").innerHTML=cart.length?`<div class="table-wrap"><table><thead><tr><th>Item</th><th>Qty</th><th class="num">Amount</th><th></th></tr></thead><tbody>${cart.map(x=>`<tr><td>${esc(x.title)}<div class="muted">${money(x.price)} each</div></td><td><div class="cart-controls"><button data-minus="${esc(x.id)}">−</button><span>${x.qty}</span><button data-plus="${esc(x.id)}">+</button></div></td><td class="num">${money(x.price*x.qty)}</td><td><button class="danger" data-remove="${esc(x.id)}">×</button></td></tr>`).join("")}</tbody></table></div>`:"<p class='muted'>No items added yet.</p>";
  $("cartArea").querySelectorAll("[data-minus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
  $("cartArea").querySelectorAll("[data-plus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
- $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{cart=cart.filter(x=>x.id!==b.dataset.remove);renderCart()});
- $("billTotal").textContent=money(total);$("itemCount").textContent=count;updateChange();
+$("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{
+ const id=b.dataset.remove;
+ const line=cart.find(x=>x.id===id);
+ if(!line)return;
+
+ try{
+   const ref=doc(db,"products",id);
+
+   await runTransaction(db,async tx=>{
+     const snap=await tx.get(ref);
+     if(!snap.exists())throw new Error("Item no longer exists.");
+
+     const currentStock=Number(snap.data().stock||0);
+
+     tx.update(ref,{
+       stock:currentStock+line.qty,
+       updatedAt:serverTimestamp()
+     });
+   });
+
+   const p=products.find(x=>x.id===id);
+   if(p)p.stock=Number(p.stock||0)+line.qty;
+
+   cart=cart.filter(x=>x.id!==id);
+   renderCart();
+
+ }catch(e){
+   message("Could not return stock: "+e.message,"error");
+ }
+});
+  $("billTotal").textContent=money(total);$("itemCount").textContent=count;updateChange();
 }
-function changeQty(id,delta){const line=cart.find(x=>x.id===id),p=products.find(x=>x.id===id);if(!line)return;const n=line.qty+delta;if(n<=0)cart=cart.filter(x=>x.id!==id);else if(n>Number(p?.stock||0))return message("Not enough stock available.","error");else line.qty=n;renderCart()}
-function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
+async function changeQty(id,delta){
+ const line=cart.find(x=>x.id===id);
+ const p=products.find(x=>x.id===id);
+ if(!line||!p)return;
+
+ // Only return stock when decreasing quantity
+ if(delta<0){
+   try{
+     const ref=doc(db,"products",id);
+
+     await runTransaction(db,async tx=>{
+       const snap=await tx.get(ref);
+       if(!snap.exists())throw new Error("Item no longer exists.");
+
+       const currentStock=Number(snap.data().stock||0);
+
+       tx.update(ref,{
+         stock:currentStock+1,
+         updatedAt:serverTimestamp()
+       });
+     });
+
+     p.stock=Number(p.stock||0)+1;
+
+   }catch(e){
+     return message("Could not return stock: "+e.message,"error");
+   }
+ }
+
+ // Increasing quantity
+ if(delta>0){
+   if(Number(p.stock||0)<=0)
+     return message("Not enough stock available.","error");
+
+   return addToCart(id);
+ }
+
+ line.qty+=delta;
+
+ if(line.qty<=0)
+   cart=cart.filter(x=>x.id!==id);
+
+ renderCart();
+}
+ function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
 $("cashReceived").addEventListener("input",updateChange);
-$("clearCartBtn").onclick=()=>{cart=[];$("cashReceived").value="";renderCart()};
+$("clearCartBtn").onclick=async()=>{
+ if(!cart.length){
+   $("cashReceived").value="";
+   renderCart();
+   return;
+ }
+
+ try{
+   for(const line of cart){
+     const ref=doc(db,"products",line.id);
+
+     await runTransaction(db,async tx=>{
+       const snap=await tx.get(ref);
+       if(!snap.exists())return;
+
+       const currentStock=Number(snap.data().stock||0);
+
+       tx.update(ref,{
+         stock:currentStock+line.qty,
+         updatedAt:serverTimestamp()
+       });
+     });
+
+     const p=products.find(x=>x.id===line.id);
+     if(p)p.stock=Number(p.stock||0)+line.qty;
+   }
+
+   cart=[];
+   $("cashReceived").value="";
+   renderCart();
+
+ }catch(e){
+   message("Could not return stock: "+e.message,"error");
+ }
+ };
 
 $("completeSaleBtn").onclick=async()=>{
  if(!cart.length)return message("Add at least one book first.","error");
@@ -206,7 +355,7 @@ $("completeSaleBtn").onclick=async()=>{
   await runTransaction(db,async tx=>{
     const fresh=[];
     for(const line of lines){const ref=doc(db,"products",line.id);const snap=await tx.get(ref);if(!snap.exists())throw new Error(`Book "${line.title}" no longer exists.`);const data=snap.data();if(Number(data.stock)<line.qty)throw new Error(`Insufficient stock for "${data.title}". Refresh inventory and try again.`);fresh.push({ref,data,line})}
-    for(const x of fresh)tx.update(x.ref,{stock:Number(x.data.stock)-x.line.qty,updatedAt:serverTimestamp()});
+    for(const x of fresh)
     tx.set(saleRef,{billNo:"BS-"+saleRef.id.slice(0,8).toUpperCase(),items:lines.map(({id,title,barcode,price,qty,amount})=>({productId:id,title,barcode,price,qty,amount})),total,cashReceived:Number(cash.toFixed(2)),change:Number((cash-total).toFixed(2)),cashierUid:currentUser.uid,cashierEmail:currentUser.email,createdAt:serverTimestamp(),createdAtLocal:new Date().toISOString()});
   });
   const saleSnap=await getDoc(saleRef);lastSale={id:saleRef.id,...saleSnap.data()};await loadProducts();cart=[];$("cashReceived").value="";renderCart();buildReceipt(lastSale);message("Sale saved successfully. Use Print receipt to issue the bill.","success");showReceiptActions();
