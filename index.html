@@ -286,14 +286,15 @@ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{
      });
 
      p.stock=Number(p.stock||0)+1;
-      await loadProducts();
+    
      if(line.qty===1){
        cart=cart.filter(x=>x.id!==id);
      }else{
        line.qty--;
-     }
+     }  
 
      renderCart();
+searchBooks();
 
    }catch(e){
      message("Could not return stock: "+e.message,"error");
