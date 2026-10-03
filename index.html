@@ -263,12 +263,12 @@ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{
 });
   $("billTotal").textContent=money(total);$("itemCount").textContent=count;updateChange();
 }
-async function changeQty(id,delta){
+
+ async function changeQty(id,delta){
  const line=cart.find(x=>x.id===id);
  const p=products.find(x=>x.id===id);
  if(!line||!p)return;
 
- // Only return stock when decreasing quantity
  if(delta<0){
    try{
      const ref=doc(db,"products",id);
@@ -287,25 +287,24 @@ async function changeQty(id,delta){
 
      p.stock=Number(p.stock||0)+1;
 
+     if(line.qty===1){
+       cart=cart.filter(x=>x.id!==id);
+     }else{
+       line.qty--;
+     }
+
+     renderCart();
+
    }catch(e){
-     return message("Could not return stock: "+e.message,"error");
+     message("Could not return stock: "+e.message,"error");
    }
+
+   return;
  }
 
- // Increasing quantity
  if(delta>0){
-   if(Number(p.stock||0)<=0)
-     return message("Not enough stock available.","error");
-
    return addToCart(id);
  }
-
- line.qty+=delta;
-
- if(line.qty<=0)
-   cart=cart.filter(x=>x.id!==id);
-
- renderCart();
 }
  function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
 $("cashReceived").addEventListener("input",updateChange);
