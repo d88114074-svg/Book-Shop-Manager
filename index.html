@@ -350,45 +350,50 @@ searchBooks();
  function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
 $("cashReceived").addEventListener("input",updateChange);
 $("clearCartBtn").onclick=async()=>{
- if(!cart.length){
-   $("cashReceived").value="";
-   renderCart();
-   return;
- }
+  if(!cart.length){
+    $("cashReceived").value="";
+    renderCart();
+    return;
+  }
 
- try{
-   for(const line of cart){
-     const ref=doc(db,"products",line.id);
+  try{
+    for(const line of cart){
+      const ref=doc(db,"products",line.id);
 
-     await runTransaction(db,async tx=>{
-       const snap=await tx.get(ref);
-       if(!snap.exists())return;
+      await runTransaction(db,async tx=>{
+        const snap=await tx.get(ref);
+        if(!snap.exists())return;
 
-       const currentStock=Number(snap.data().stock||0);
+        const currentStock=Number(snap.data().stock||0);
 
-       tx.update(ref,{
-         stock:currentStock+line.qty,
-         updatedAt:serverTimestamp()
-       });
-     });
+        tx.update(ref,{
+          stock:currentStock+line.qty,
+          updatedAt:serverTimestamp()
+        });
+      });
+    }
 
-     const p=products.find(x=>x.id===line.id);
-if(p){
-  p.stock=Number(p.stock||0)+line.qty;
+    cart=[];
+    $("cashReceived").value="";
+    localStorage.removeItem("bookshop_cart_draft");
 
-  const stockCell=document.querySelector(`[data-stock="${line.id}"]`);
-  if(stockCell)stockCell.textContent=p.stock;
-}
-   }
+    // Get the latest stock from Firebase
+    await loadProducts();
 
-   cart=[];
-   $("cashReceived").value="";
-   renderCart();
+    renderCart();
 
- }catch(e){
-   message("Could not return stock: "+e.message,"error");
- }
- };
+    // Refresh the visible search results
+    const searchTerm=$("bookSearch").value.trim();
+    if(searchTerm){
+      await searchBooks();
+    }
+
+    message("Bill cleared. Stock returned successfully.","success");
+
+  }catch(e){
+    message("Could not return stock: "+e.message,"error");
+  }
+};
 
 $("completeSaleBtn").onclick=async()=>{
  if(!cart.length)return message("Add at least one book first.","error");
