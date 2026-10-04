@@ -383,10 +383,7 @@ $("clearCartBtn").onclick=async()=>{
     renderCart();
 
     // Refresh the visible search results
-    const searchTerm=$("bookSearch").value.trim();
-    if(searchTerm){
-      await searchBooks();
-    }
+    
 
     message("Bill cleared. Stock returned successfully.","success");
 
