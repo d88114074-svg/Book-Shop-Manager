@@ -124,7 +124,10 @@ function initFirebase(){
      $("sessionInfo").textContent=user.email+" · "+currentRole;
      $("welcome").textContent="Signed in as "+user.email+" ("+currentRole+")";
      $("inventoryTab").classList.toggle("hidden",currentRole!=="admin");
-     await loadProducts();renderCart();await loadHistory();
+     await loadProducts();
+loadCartDraft();
+renderCart();
+await loadHistory();
    }catch(e){message("Sign-in setup error: "+e.message,"error")}
  });
 }
@@ -181,7 +184,23 @@ async function searchBooks(){
  }catch(e){message("Search failed: "+e.message,"error")}
 }
 $("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchBooks()}});
-async function addToCart(id){
+
+ function saveCartDraft(){
+  localStorage.setItem("bookshop_cart_draft", JSON.stringify(cart));
+}
+
+function loadCartDraft(){
+  try{
+    const saved=localStorage.getItem("bookshop_cart_draft");
+    if(saved){
+      cart=JSON.parse(saved)||[];
+    }
+  }catch(e){
+    console.error("Could not load bill draft:",e);
+    cart=[];
+  }
+}
+ async function addToCart(id){
  const p=products.find(x=>x.id===id);
  if(!p)return;
 
@@ -225,6 +244,7 @@ if(stockCell)stockCell.textContent=p.stock;
 
 renderCart();
   message("Stock reduced. New stock: "+p.stock,"success");
+saveCartDraft();
    
 
  }catch(e){
@@ -260,7 +280,8 @@ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{
    if(p)p.stock=Number(p.stock||0)+line.qty;
 
    cart=cart.filter(x=>x.id!==id);
-   renderCart();
+renderCart();
+saveCartDraft();
 
  }catch(e){
    message("Could not return stock: "+e.message,"error");
@@ -301,6 +322,7 @@ if(stockCell)stockCell.textContent=p.stock;
      }  
 
      renderCart();
+saveCartDraft();
 searchBooks();
 
    }catch(e){
@@ -366,7 +388,8 @@ $("completeSaleBtn").onclick=async()=>{
     for(const x of fresh)
     tx.set(saleRef,{billNo:"BS-"+saleRef.id.slice(0,8).toUpperCase(),items:lines.map(({id,title,barcode,price,qty,amount})=>({productId:id,title,barcode,price,qty,amount})),total,cashReceived:Number(cash.toFixed(2)),change:Number((cash-total).toFixed(2)),cashierUid:currentUser.uid,cashierEmail:currentUser.email,createdAt:serverTimestamp(),createdAtLocal:new Date().toISOString()});
   });
-  const saleSnap=await getDoc(saleRef);lastSale={id:saleRef.id,...saleSnap.data()};await loadProducts();cart=[];$("cashReceived").value="";renderCart();buildReceipt(lastSale);message("Sale saved successfully. Use Print receipt to issue the bill.","success");showReceiptActions();
+const saleSnap=await getDoc(saleRef);lastSale={id:saleRef.id,...saleSnap.data()};await loadProducts();cart=[];localStorage.removeItem("bookshop_cart_draft");$("cashReceived").value="";renderCart();
+  buildReceipt(lastSale);message("Sale saved successfully. Use Print receipt to issue the bill.","success");showReceiptActions();
  }catch(e){message("Sale not completed: "+e.message,"error")}
 };
 function buildReceipt(s){
