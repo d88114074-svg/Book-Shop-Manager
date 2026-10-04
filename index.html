@@ -105,6 +105,7 @@ const firebaseConfig = {
 const $ = id => document.getElementById(id);
 const loginPanel=$("loginPanel"), appPanel=$("appPanel");
 let auth, db, currentUser=null, currentRole=null, products=[], cart=[], lastSale=null;
+let addingStock=false;
 const money=n=>(Number(n)||0).toLocaleString("en-LK",{minimumFractionDigits:2,maximumFractionDigits:2});
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 function message(text,type="notice"){const el=$("globalMsg");el.className="notice "+(type==="error"?"error":type==="success"?"success":"");el.textContent=text;setTimeout(()=>{if(el.textContent===text)el.textContent=""},6500)}
@@ -201,6 +202,8 @@ function loadCartDraft(){
   }
 }
  async function addToCart(id){
+  if(addingStock)return;
+addingStock=true;
  const p=products.find(x=>x.id===id);
  if(!p)return;
 
@@ -245,10 +248,13 @@ if(stockCell)stockCell.textContent=p.stock;
 renderCart();
   message("Stock reduced. New stock: "+p.stock,"success");
 saveCartDraft();
+  
    
 
- }catch(e){
+}catch(e){
    message("Could not reserve stock: "+e.message,"error");
+ }finally{
+   addingStock=false;
  }
 }
  function renderCart(){
