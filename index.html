@@ -287,222 +287,300 @@ $("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=
 function loadCartDraft(){
   try{
     const saved=localStorage.getItem("bookshop_cart_draft");
+
     if(saved){
       cart=JSON.parse(saved)||[];
+
+      // Rebuild local remaining-stock cache from the
+      // stock values already loaded in products.
+      for(const line of cart){
+        const p=products.find(x=>x.id===line.id);
+        if(p){
+          p.stock=Number(p.stock||0)-Number(line.qty||0);
+        }
+      }
     }
   }catch(e){
     console.error("Could not load bill draft:",e);
     cart=[];
   }
 }
- async function addToCart(id){
+ function addToCart(id){
   if(addingStock)return;
-addingStock=true;
- const p=products.find(x=>x.id===id);
- if(!p)return;
 
- const line=cart.find(x=>x.id===id);
- const qty=(line?.qty||0)+1;
+  addingStock=true;
 
- if(qty>Number(p.stock||0))
-   return message("Not enough stock available.","error");
+  try{
+    const p=products.find(x=>x.id===id);
+    if(!p)throw new Error("Book not found.");
 
- try{
-   const ref=doc(db,"products",id);
+    const line=cart.find(x=>x.id===id);
+    const currentQty=Number(line?.qty||0);
+    const availableStock=Number(p.stock||0);
 
-   await runTransaction(db,async tx=>{
-     const snap=await tx.get(ref);
-     if(!snap.exists())throw new Error("Item no longer exists.");
+    // p.stock is now the LOCAL remaining stock.
+    if(availableStock<=0){
+      return message("Not enough stock available.","error");
+    }
 
-     const currentStock=Number(snap.data().stock||0);
+    const newQty=currentQty+1;
 
-     if(currentStock<=0)
-       throw new Error("No stock available.");
+    if(line){
+      line.qty=newQty;
+    }else{
+      cart.push({
+        id:p.id,
+        title:p.title,
+        barcode:p.barcode,
+        price:Number(p.price),
+        qty:1
+      });
+    }
 
-     tx.update(ref,{
-       stock:currentStock-1,
-       updatedAt:serverTimestamp()
-     });
-   });
+    // Reduce ONLY local cached stock.
+    p.stock=availableStock-1;
 
-   if(line)line.qty=qty;
-   else cart.push({
-     id:p.id,
-     title:p.title,
-     barcode:p.barcode,
-     price:Number(p.price),
-     qty:1
-   });
+    const stockCell=document.querySelector(`[data-stock="${id}"]`);
+    if(stockCell)stockCell.textContent=p.stock;
 
-p.stock=Number(p.stock||0)-1;
+    renderCart();
+    saveCartDraft();
 
-const stockCell=document.querySelector(`[data-stock="${id}"]`);
-if(stockCell)stockCell.textContent=p.stock;
-
-renderCart();
-  message("Stock reduced. New stock: "+p.stock,"success");
-saveCartDraft();
-  
-   
-
-}catch(e){
-   message("Could not reserve stock: "+e.message,"error");
- }finally{
-   addingStock=false;
- }
+  }catch(e){
+    message("Could not add book: "+e.message,"error");
+  }finally{
+    addingStock=false;
+  }
 }
  function renderCart(){
  const total=cart.reduce((s,x)=>s+x.price*x.qty,0),count=cart.reduce((s,x)=>s+x.qty,0);
  $("cartArea").innerHTML=cart.length?`<div class="table-wrap"><table><thead><tr><th>Item</th><th>Qty</th><th class="num">Amount</th><th></th></tr></thead><tbody>${cart.map(x=>`<tr><td>${esc(x.title)}<div class="muted">${money(x.price)} each</div></td><td><div class="cart-controls"><button data-minus="${esc(x.id)}">−</button><span>${x.qty}</span><button data-plus="${esc(x.id)}">+</button></div></td><td class="num">${money(x.price*x.qty)}</td><td><button class="danger" data-remove="${esc(x.id)}">×</button></td></tr>`).join("")}</tbody></table></div>`:"<p class='muted'>No items added yet.</p>";
  $("cartArea").querySelectorAll("[data-minus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.minus,-1));
  $("cartArea").querySelectorAll("[data-plus]").forEach(b=>b.onclick=()=>changeQty(b.dataset.plus,1));
-$("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=async()=>{
- const id=b.dataset.remove;
- const line=cart.find(x=>x.id===id);
- if(!line)return;
+$("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{
+  const id=b.dataset.remove;
+  const line=cart.find(x=>x.id===id);
+  const p=products.find(x=>x.id===id);
 
- try{
-   const ref=doc(db,"products",id);
+  if(!line||!p)return;
 
-   await runTransaction(db,async tx=>{
-     const snap=await tx.get(ref);
-     if(!snap.exists())throw new Error("Item no longer exists.");
+  // Return the whole quantity to LOCAL stock.
+  p.stock=Number(p.stock||0)+Number(line.qty||0);
 
-     const currentStock=Number(snap.data().stock||0);
+  const stockCell=document.querySelector(`[data-stock="${id}"]`);
+  if(stockCell)stockCell.textContent=p.stock;
 
-     tx.update(ref,{
-       stock:currentStock+line.qty,
-       updatedAt:serverTimestamp()
-     });
-   });
+  cart=cart.filter(x=>x.id!==id);
 
-   const p=products.find(x=>x.id===id);
-   if(p)p.stock=Number(p.stock||0)+line.qty;
-
-   cart=cart.filter(x=>x.id!==id);
-renderCart();
-saveCartDraft();
-
- }catch(e){
-   message("Could not return stock: "+e.message,"error");
- }
+  renderCart();
+  saveCartDraft();
 });
-  $("billTotal").textContent=money(total);$("itemCount").textContent=count;updateChange();
-}
 
- async function changeQty(id,delta){
- const line=cart.find(x=>x.id===id);
- const p=products.find(x=>x.id===id);
- if(!line||!p)return;
+ function changeQty(id,delta){
+  const line=cart.find(x=>x.id===id);
+  const p=products.find(x=>x.id===id);
 
- if(delta<0){
-   if(reducingStock)return;
-   reducingStock=true;
+  if(!line||!p)return;
 
-   try{
-     const ref=doc(db,"products",id);
+  if(delta<0){
 
-     await runTransaction(db,async tx=>{
-       const snap=await tx.get(ref);
-       if(!snap.exists())throw new Error("Item no longer exists.");
+    // Return ONE item to the local stock cache.
+    p.stock=Number(p.stock||0)+1;
 
-       const currentStock=Number(snap.data().stock||0);
+    if(line.qty===1){
+      cart=cart.filter(x=>x.id!==id);
+    }else{
+      line.qty--;
+    }
 
-       tx.update(ref,{
-         stock:currentStock+1,
-         updatedAt:serverTimestamp()
-       });
-     });
-
-     p.stock=Number(p.stock||0)+1;
-    
     const stockCell=document.querySelector(`[data-stock="${id}"]`);
-if(stockCell)stockCell.textContent=p.stock;
-     if(line.qty===1){
-       cart=cart.filter(x=>x.id!==id);
-     }else{
-       line.qty--;
-     }  
+    if(stockCell)stockCell.textContent=p.stock;
 
-     renderCart();
-saveCartDraft();
-searchBooks();
+    renderCart();
+    saveCartDraft();
 
-   }catch(e){
-     message("Could not return stock: "+e.message,"error");
-   }finally{
-     reducingStock=false;
-   }
+    return;
+  }
 
-   return;
- }
-
- if(delta>0){
-   return addToCart(id);
- }
+  if(delta>0){
+    addToCart(id);
+  }
 }
  function updateChange(){const total=cart.reduce((s,x)=>s+x.price*x.qty,0),cash=Number($("cashReceived").value)||0;$("changeDue").textContent=money(Math.max(0,cash-total))}
 $("cashReceived").addEventListener("input",updateChange);
-$("clearCartBtn").onclick=async()=>{
+$("clearCartBtn").onclick=()=>{
   if(!cart.length){
     $("cashReceived").value="";
     renderCart();
     return;
   }
 
+  // Return all bill quantities to LOCAL stock cache.
+  for(const line of cart){
+    const p=products.find(x=>x.id===line.id);
+
+    if(p){
+      p.stock=Number(p.stock||0)+Number(line.qty||0);
+
+      const stockCell=document.querySelector(`[data-stock="${line.id}"]`);
+      if(stockCell)stockCell.textContent=p.stock;
+    }
+  }
+
+  cart=[];
+
+  $("cashReceived").value="";
+  localStorage.removeItem("bookshop_cart_draft");
+
+  renderCart();
+
+  message("Bill cleared. Stock restored.","success");
+};
+
+$("completeSaleBtn").onclick=async()=>{
+  if(!cart.length)
+    return message("Add at least one book first.","error");
+
+  const total=Number(
+    cart.reduce((s,x)=>s+x.price*x.qty,0).toFixed(2)
+  );
+
+  const cash=Number($("cashReceived").value);
+
+  if(!Number.isFinite(cash)||cash<total)
+    return message(
+      "Cash received must be equal to or greater than the bill total.",
+      "error"
+    );
+
+  if(!confirm(`Complete sale for LKR ${money(total)}?`))
+    return;
+
+  const lines=cart.map(x=>({
+    ...x,
+    amount:Number((x.price*x.qty).toFixed(2))
+  }));
+
   try{
-    for(const line of cart){
-      const ref=doc(db,"products",line.id);
 
-      await runTransaction(db,async tx=>{
+    const saleRef=doc(collection(db,"sales"));
+
+    await runTransaction(db,async tx=>{
+
+      const fresh=[];
+
+      // Read every product from Firebase first.
+      for(const line of lines){
+
+        const ref=doc(db,"products",line.id);
         const snap=await tx.get(ref);
-        if(!snap.exists())return;
 
-        const currentStock=Number(snap.data().stock||0);
+        if(!snap.exists()){
+          throw new Error(
+            `Book "${line.title}" no longer exists.`
+          );
+        }
 
-        tx.update(ref,{
-          stock:currentStock+line.qty,
+        const data=snap.data();
+        const currentStock=Number(data.stock||0);
+
+        if(currentStock<Number(line.qty)){
+          throw new Error(
+            `Insufficient stock for "${data.title}". `+
+            `Available: ${currentStock}, Required: ${line.qty}.`
+          );
+        }
+
+        fresh.push({
+          ref,
+          data,
+          line,
+          currentStock
+        });
+      }
+
+      // NOW deduct stock from Firebase ONCE.
+      for(const x of fresh){
+
+        tx.update(x.ref,{
+          stock:x.currentStock-Number(x.line.qty),
           updatedAt:serverTimestamp()
         });
-      });
-    }
+      }
 
+      // Save the sale.
+      tx.set(saleRef,{
+        billNo:"BS-"+saleRef.id.slice(0,8).toUpperCase(),
+
+        items:lines.map(({
+          id,
+          title,
+          barcode,
+          price,
+          qty,
+          amount
+        })=>({
+          productId:id,
+          title,
+          barcode,
+          price,
+          qty,
+          amount
+        })),
+
+        total,
+
+        cashReceived:Number(cash.toFixed(2)),
+
+        change:Number(
+          (cash-total).toFixed(2)
+        ),
+
+        cashierUid:currentUser.uid,
+        cashierEmail:currentUser.email,
+
+        createdAt:serverTimestamp(),
+        createdAtLocal:new Date().toISOString()
+      });
+
+    });
+
+    // Sale completed successfully.
+    const saleSnap=await getDoc(saleRef);
+
+    lastSale={
+      id:saleRef.id,
+      ...saleSnap.data()
+    };
+
+    // Clear local bill.
     cart=[];
-    $("cashReceived").value="";
+
     localStorage.removeItem("bookshop_cart_draft");
 
-    // Get the latest stock from Firebase
+    $("cashReceived").value="";
+
+    // Get fresh inventory from Firebase.
     await loadProducts();
 
     renderCart();
 
-    // Refresh the visible search results
-    
+    buildReceipt(lastSale);
 
-    message("Bill cleared. Stock returned successfully.","success");
+    message(
+      "Sale saved successfully. Use Print receipt to issue the bill.",
+      "success"
+    );
+
+    showReceiptActions();
 
   }catch(e){
-    message("Could not return stock: "+e.message,"error");
-  }
-};
 
-$("completeSaleBtn").onclick=async()=>{
- if(!cart.length)return message("Add at least one book first.","error");
- const total=Number(cart.reduce((s,x)=>s+x.price*x.qty,0).toFixed(2)),cash=Number($("cashReceived").value);
- if(!Number.isFinite(cash)||cash<total)return message("Cash received must be equal to or greater than the bill total.","error");
- if(!confirm(`Complete sale for LKR ${money(total)}?`))return;
- const lines=cart.map(x=>({...x,amount:Number((x.price*x.qty).toFixed(2))}));
- try{
-  const saleRef=doc(collection(db,"sales"));
-  await runTransaction(db,async tx=>{
-    const fresh=[];
-    for(const line of lines){const ref=doc(db,"products",line.id);const snap=await tx.get(ref);if(!snap.exists())throw new Error(`Book "${line.title}" no longer exists.`);const data=snap.data();if(Number(data.stock)<line.qty)throw new Error(`Insufficient stock for "${data.title}". Refresh inventory and try again.`);fresh.push({ref,data,line})}
-    for(const x of fresh)
-    tx.set(saleRef,{billNo:"BS-"+saleRef.id.slice(0,8).toUpperCase(),items:lines.map(({id,title,barcode,price,qty,amount})=>({productId:id,title,barcode,price,qty,amount})),total,cashReceived:Number(cash.toFixed(2)),change:Number((cash-total).toFixed(2)),cashierUid:currentUser.uid,cashierEmail:currentUser.email,createdAt:serverTimestamp(),createdAtLocal:new Date().toISOString()});
-  });
-const saleSnap=await getDoc(saleRef);lastSale={id:saleRef.id,...saleSnap.data()};await loadProducts();cart=[];localStorage.removeItem("bookshop_cart_draft");$("cashReceived").value="";renderCart();
-  buildReceipt(lastSale);message("Sale saved successfully. Use Print receipt to issue the bill.","success");showReceiptActions();
- }catch(e){message("Sale not completed: "+e.message,"error")}
+    message(
+      "Sale not completed: "+e.message,
+      "error"
+    );
+  }
 };
 function buildReceipt(s){
  const date=s.createdAt?.toDate?s.createdAt.toDate():new Date(s.createdAtLocal||Date.now());
