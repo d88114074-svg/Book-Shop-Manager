@@ -82,6 +82,69 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <section id="historyView" class="hidden">
 <div class="panel"><div class="row"><div><h2>Sales history</h2><div class="muted">Latest sales first. Cashiers can view completed bills.</div></div><div><label>From date</label><input type="date" id="historyFrom"></div><div><label>To date</label><input type="date" id="historyTo"></div><div style="flex:0 0 110px"><button id="refreshHistoryBtn" class="secondary">Refresh</button></div></div><div id="historyTable" class="table-wrap"></div></div>
 </section>
+ <section id="analysisView" class="hidden">
+
+<div class="panel">
+  <div class="row">
+    <div>
+      <h2>📊 Sales Analysis</h2>
+      <div class="muted">View your shop sales performance.</div>
+    </div>
+    <div>
+      <label>Period</label>
+      <select id="analysisPeriod">
+        <option value="today">Today</option>
+        <option value="week">This week</option>
+        <option value="month" selected>This month</option>
+        <option value="all">All time</option>
+      </select>
+    </div>
+    <div style="flex:0 0 110px">
+      <button id="refreshAnalysisBtn" class="secondary">Refresh</button>
+    </div>
+  </div>
+</div>
+
+<div class="statgrid">
+
+  <div class="stat">
+    <span class="muted">Total sales</span>
+    <strong id="analysisTotalSales">0.00</strong>
+  </div>
+
+  <div class="stat">
+    <span class="muted">Bills</span>
+    <strong id="analysisBillCount">0</strong>
+  </div>
+
+  <div class="stat">
+    <span class="muted">Items sold</span>
+    <strong id="analysisItemsSold">0</strong>
+  </div>
+
+  <div class="stat">
+    <span class="muted">Estimated profit</span>
+    <strong id="analysisProfit">0.00</strong>
+  </div>
+
+</div>
+
+<div class="panel">
+  <h2>📈 Sales trend</h2>
+  <div id="salesTrendChart" style="min-height:300px;"></div>
+</div>
+
+<div class="panel">
+  <h2>🏆 Top-selling items</h2>
+  <div id="topSellingChart" style="min-height:300px;"></div>
+</div>
+
+<div class="panel">
+  <h2>📦 Stock alerts</h2>
+  <div id="lowStockAnalysis" class="table-wrap"></div>
+</div>
+
+</section>
 </section>
 </main>
 <div id="receipt" class="hidden"></div>
@@ -140,15 +203,42 @@ $("logoutBtn").onclick=()=>signOut(auth);
 try{initFirebase()}catch(e){showLoginMsg(e.message);}
 
 function switchTab(tab){
- for(const b of document.querySelectorAll("[data-tab]"))b.classList.toggle("active",b.dataset.tab===tab);
- $("salesView").classList.toggle("hidden",tab!=="sales");$("inventoryView").classList.toggle("hidden",tab!=="inventory");$("historyView").classList.toggle("hidden",tab!=="history");
- if(tab==="inventory"&&currentRole!=="admin"){message("Admin access required.","error");switchTab("history");return}
-if(tab==="sales"&&currentRole!=="cashier"){message("Cashier access required.","error");switchTab("history");return}
- if(tab==="inventory")renderInventory();if(tab==="history")loadHistory();
-}
-document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
+ for(const b of document.querySelectorAll("[data-tab]"))
+   b.classList.toggle("active",b.dataset.tab===tab);
 
-async function loadProducts(){
+ $("salesView").classList.toggle("hidden",tab!=="sales");
+ $("inventoryView").classList.toggle("hidden",tab!=="inventory");
+ $("historyView").classList.toggle("hidden",tab!=="history");
+ $("analysisView").classList.toggle("hidden",tab!=="analysis");
+
+ if(tab==="inventory"&&currentRole!=="admin"){
+   message("Admin access required.","error");
+   switchTab("history");
+   return;
+ }
+
+ if(tab==="analysis"&&currentRole!=="admin"){
+   message("Admin access required.","error");
+   switchTab("history");
+   return;
+ }
+
+ if(tab==="sales"&&currentRole!=="cashier"){
+   message("Cashier access required.","error");
+   switchTab("history");
+   return;
+ }
+
+ if(tab==="inventory")renderInventory();
+ if(tab==="history")loadHistory();
+ if(tab==="analysis")loadSalesAnalysis();
+}
+
+document.querySelectorAll("[data-tab]").forEach(
+ b=>b.onclick=()=>switchTab(b.dataset.tab)
+);
+ 
+ async function loadProducts(){
  const snap=await getDocs(collection(db,"products"));
  products=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.title||"").localeCompare(b.title||""));
  renderInventory();
