@@ -382,29 +382,115 @@ async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!con
 
 async function searchBooks(){
  const term=$("bookSearch").value.trim().toLowerCase();
-if(!term)return;
+ if(!term)return;
 
-const searchQty=Number($("searchQty").value)||1;
-if(searchQty<1 || !Number.isInteger(searchQty)){
-  return message("Enter a valid quantity.","error");
-}try{let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
- if(!matches.length)matches=products.filter(p=>(p.title+" "+(p.author||"")+" "+p.barcode).toLowerCase().includes(term)).slice(0,20);
- $("searchResults").innerHTML=matches.length?`<table><thead><tr><th>Book</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>${matches.map(p=>`<tr><td>${esc(p.title)}<div class="muted">${esc(p.barcode)}</div></td><td>${money(p.price)}</td><td data-stock="${esc(p.id)}">${Number(p.stock)||0}</td><button data-add="${esc(p.id)}" ${Number(p.stock)<=0?"disabled":""}>Add</button></td></tr>`).join("")}</tbody></table>`:"<p>No matching books.</p>";
- $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
-  b.onclick=()=>addToCart(b.dataset.add,searchQty);
-});
- const exact=matches.find(p=>String(p.barcode).toLowerCase()===term);
+ const searchQty=Number($("searchQty").value)||1;
 
-if(exact&&Number(exact.stock)>=searchQty){
-  addToCart(exact.id,searchQty);
-  $("bookSearch").value="";
-  $("searchResults").innerHTML="";
-  $("searchQty").value=1;
- }}
-     catch(e){message("Search failed: "+e.message,"error")}
+ if(searchQty<1 || !Number.isInteger(searchQty)){
+   return message("Enter a valid quantity.","error");
+ }
+
+ try{
+   let matches=products.filter(
+     p=>String(p.barcode||"").toLowerCase()===term
+   );
+
+   if(!matches.length){
+     matches=products.filter(
+       p=>(p.title+" "+(p.author||"")+" "+p.barcode)
+       .toLowerCase()
+       .includes(term)
+     ).slice(0,20);
+   }
+
+   $("searchResults").innerHTML=matches.length?`
+     <table>
+       <thead>
+         <tr>
+           <th>Book</th>
+           <th>Price</th>
+           <th>Stock</th>
+           <th></th>
+         </tr>
+       </thead>
+       <tbody>
+         ${matches.map(p=>`
+           <tr>
+             <td>
+               ${esc(p.title)}
+               <div class="muted">${esc(p.barcode)}</div>
+             </td>
+
+             <td>${money(p.price)}</td>
+
+             <td data-stock="${esc(p.id)}">
+               ${Number(p.stock)||0}
+             </td>
+
+             <td>
+               <button
+                 data-add="${esc(p.id)}"
+                 ${Number(p.stock)<=0?"disabled":""}>
+                 Add
+               </button>
+
+               <br>
+
+               <button
+                 data-add-qty="${esc(p.id)}"
+                 ${Number(p.stock)<searchQty?"disabled":""}
+                 style="margin-top:5px">
+                 Add ${searchQty}
+               </button>
+             </td>
+           </tr>
+         `).join("")}
+       </tbody>
+     </table>
+   `:"<p>No matching books.</p>";
+
+   // Add 1 copy
+   $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
+     b.onclick=()=>{
+       addToCart(b.dataset.add,1);
+       renderQuickSale();
+     };
+   });
+
+   // Add entered quantity
+   $("searchResults").querySelectorAll("[data-add-qty]").forEach(b=>{
+     b.onclick=()=>{
+       addToCart(b.dataset.addQty,searchQty);
+       renderQuickSale();
+     };
+   });
+
+   // Exact barcode scan
+   const exact=matches.find(
+     p=>String(p.barcode||"").toLowerCase()===term
+   );
+
+   if(exact && Number(exact.stock)>=searchQty){
+     addToCart(exact.id,searchQty);
+
+     $("bookSearch").value="";
+     $("searchResults").innerHTML="";
+     $("searchQty").value=1;
+   }
+
+ }catch(e){
+   message("Search failed: "+e.message,"error");
+ }
 }
-$("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchBooks()}});
 
+$("searchBtn").onclick=searchBooks;
+
+$("bookSearch").addEventListener("keydown",e=>{
+ if(e.key==="Enter"){
+   e.preventDefault();
+   searchBooks();
+ }
+});
  function saveCartDraft(){
   localStorage.setItem("bookshop_cart_draft", JSON.stringify(cart));
 }
