@@ -380,94 +380,106 @@ $("cancelEditBtn").onclick=resetProductForm;
 async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!confirm(`Delete "${p.title}" from inventory? Past sales remain in history.`))return;try{await deleteDoc(doc(db,"products",id));await loadProducts();message("Book deleted.","success")}catch(e){message(e.message,"error")}}
 
 async function searchBooks(){
- const term=$("bookSearch").value.trim().toLowerCase();
- if(!term)return;
+  const term=$("bookSearch").value.trim().toLowerCase();
+  if(!term)return;
 
- const searchQty=Number($("searchQty").value)||1;
-
- if(searchQty<1 || !Number.isInteger(searchQty)){
-   return message("Enter a valid quantity.","error");
- }
-
- try{
-   let matches=products.filter(
-     p=>String(p.barcode||"").toLowerCase()===term
-   );
-
-   if(!matches.length){
-     matches=products.filter(
-       p=>(p.title+" "+(p.author||"")+" "+p.barcode)
-       .toLowerCase()
-       .includes(term)
-     ).slice(0,20);
-   }
-
-   $("searchResults").innerHTML=matches.length?`
-     <table>
-       <thead>
-         <tr>
-           <th>Book</th>
-           <th>Price</th>
-           <th>Stock</th>
-           <th></th>
-         </tr>
-       </thead>
-       <tbody>
-         ${matches.map(p=>`
-           <tr>
-             <td>
-               ${esc(p.title)}
-               <div class="muted">${esc(p.barcode)}</div>
-             </td>
-
-             <td>${money(p.price)}</td>
-
-             <td data-stock="${esc(p.id)}">
-  ${Number(p.stock)||0}
-</td>
-
-<td>
-  <input
-    type="number"
-    min="1"
-    step="1"
-    value="1"
-    data-qty="${esc(p.id)}"
-    style="width:70px"
-  >
-</td>
-
-<td>
-  <button
-    data-add="${esc(p.id)}"
-    ${Number(p.stock)<=0?"disabled":""}>
-    Add
-  </button>
-</td>
-
-               <br>
-
-             
-             </td>
-           </tr>
-         `).join("")}
-       </tbody>
-     </table>
-   `:"<p>No matching books.</p>";
-
-   // Add 1 copy
-   $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
-  b.onclick=()=>{
-    const id=b.dataset.add;
-    const qtyInput=$("searchResults").querySelector(
-      `[data-qty="${id}"]`
+  try{
+    let matches=products.filter(
+      p=>String(p.barcode||"").toLowerCase()===term
     );
 
-    const qty=Number(qtyInput?.value)||1;
-
-    if(qty<1 || !Number.isInteger(qty)){
-      return message("Enter a valid quantity.","error");
+    if(!matches.length){
+      matches=products.filter(
+        p=>(p.title+" "+(p.author||"")+" "+p.barcode)
+          .toLowerCase()
+          .includes(term)
+      ).slice(0,20);
     }
+
+    $("searchResults").innerHTML=matches.length?`
+      <table>
+        <thead>
+          <tr>
+            <th>Book</th>
+            <th>Price</th>
+            <th>Stock</th>
+            <th>Quantity</th>
+            <th></th>
+          </tr>
+        </thead>
+
+        <tbody>
+          ${matches.map(p=>`
+            <tr>
+              <td>
+                ${esc(p.title)}
+                <div class="muted">${esc(p.barcode)}</div>
+              </td>
+
+              <td>${money(p.price)}</td>
+
+              <td data-stock="${esc(p.id)}">
+                ${Number(p.stock)||0}
+              </td>
+
+              <td>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value="1"
+                  data-qty="${esc(p.id)}"
+                  style="width:70px"
+                >
+              </td>
+
+              <td>
+                <button
+                  data-add="${esc(p.id)}"
+                  ${Number(p.stock)<=0?"disabled":""}>
+                  Add
+                </button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `:"<p>No matching books.</p>";
+
+    $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
+      b.onclick=()=>{
+        const id=b.dataset.add;
+
+        const qtyInput=$("searchResults").querySelector(
+          `[data-qty="${id}"]`
+        );
+
+        const qty=Number(qtyInput?.value)||1;
+
+        if(qty<1 || !Number.isInteger(qty)){
+          return message("Enter a valid quantity.","error");
+        }
+
+        addToCart(id,qty);
+        renderQuickSale();
+      };
+    });
+
+    // Exact barcode scan adds 1 copy automatically
+    const exact=matches.find(
+      p=>String(p.barcode||"").toLowerCase()===term
+    );
+
+    if(exact && Number(exact.stock)>0){
+      addToCart(exact.id,1);
+      $("bookSearch").value="";
+      $("searchResults").innerHTML="";
+    }
+
+  }catch(e){
+    message("Search failed: "+e.message,"error");
+  }
+}
 
     addToCart(id,qty);
     renderQuickSale();
@@ -500,10 +512,10 @@ async function searchBooks(){
  $("searchBtn").onclick=searchBooks;
 
 $("bookSearch").addEventListener("keydown",e=>{
- if(e.key==="Enter"){
-   e.preventDefault();
-   searchBooks();
- }
+  if(e.key==="Enter"){
+    e.preventDefault();
+    searchBooks();
+  }
 });
  function saveCartDraft(){
   localStorage.setItem("bookshop_cart_draft", JSON.stringify(cart));
