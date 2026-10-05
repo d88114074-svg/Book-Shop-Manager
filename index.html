@@ -87,6 +87,10 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <div class="posgrid">
 <div class="panel no-print">
 <h2>Find books</h2>
+ <div style="margin-bottom:10px">
+  <label>Quantity</label>
+  <input id="searchQty" type="number" min="1" step="1" value="1" style="max-width:120px">
+</div>
 <label>Scan barcode or search by title / ISBN</label>
 <div class="row"><input id="bookSearch" placeholder="Scan barcode, then press Enter" autocomplete="off"><button id="searchBtn" style="flex:0 0 110px">Search</button></div>
 <p class="muted">Most USB/Bluetooth barcode scanners act like a keyboard and send Enter after scanning. Tap this box before scanning.</p>
@@ -377,13 +381,27 @@ $("cancelEditBtn").onclick=resetProductForm;
 async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!confirm(`Delete "${p.title}" from inventory? Past sales remain in history.`))return;try{await deleteDoc(doc(db,"products",id));await loadProducts();message("Book deleted.","success")}catch(e){message(e.message,"error")}}
 
 async function searchBooks(){
- const term=$("bookSearch").value.trim().toLowerCase();if(!term)return;
- try{let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
+ const term=$("bookSearch").value.trim().toLowerCase();
+if(!term)return;
+
+const searchQty=Number($("searchQty").value)||1;
+if(searchQty<1 || !Number.isInteger(searchQty)){
+  return message("Enter a valid quantity.","error");
+}try{let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
  if(!matches.length)matches=products.filter(p=>(p.title+" "+(p.author||"")+" "+p.barcode).toLowerCase().includes(term)).slice(0,20);
  $("searchResults").innerHTML=matches.length?`<table><thead><tr><th>Book</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>${matches.map(p=>`<tr><td>${esc(p.title)}<div class="muted">${esc(p.barcode)}</div></td><td>${money(p.price)}</td><td data-stock="${esc(p.id)}">${Number(p.stock)||0}</td><button data-add="${esc(p.id)}" ${Number(p.stock)<=0?"disabled":""}>Add</button></td></tr>`).join("")}</tbody></table>`:"<p>No matching books.</p>";
- $("searchResults").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addToCart(b.dataset.add));
- const exact=matches.find(p=>String(p.barcode).toLowerCase()===term);if(exact&&Number(exact.stock)>0){addToCart(exact.id);$("bookSearch").value="";$("searchResults").innerHTML=""}
- }catch(e){message("Search failed: "+e.message,"error")}
+ $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
+  b.onclick=()=>addToCart(b.dataset.add,searchQty);
+});
+ const exact=matches.find(p=>String(p.barcode).toLowerCase()===term);
+
+if(exact&&Number(exact.stock)>=searchQty){
+  addToCart(exact.id,searchQty);
+  $("bookSearch").value="";
+  $("searchResults").innerHTML="";
+  $("searchQty").value=1;
+ }}
+     catch(e){message("Search failed: "+e.message,"error")}
 }
 $("searchBtn").onclick=searchBooks;$("bookSearch").addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();searchBooks()}});
 
@@ -412,7 +430,7 @@ function loadCartDraft(){
     cart=[];
   }
 }
- function addToCart(id){
+ function addToCart(id, qty=1){
   if(addingStock)return;
 
   addingStock=true;
@@ -426,11 +444,17 @@ function loadCartDraft(){
     const availableStock=Number(p.stock||0);
 
     // p.stock is now the LOCAL remaining stock.
-    if(availableStock<=0){
-      return message("Not enough stock available.","error");
-    }
+    const addQty=Number(qty)||1;
 
-    const newQty=currentQty+1;
+if(addQty<1 || !Number.isInteger(addQty)){
+  return message("Enter a valid quantity.","error");
+}
+
+if(availableStock<addQty){
+  return message("Not enough stock available.","error");
+}
+
+const newQty=currentQty+addQty;
 
     if(line){
       line.qty=newQty;
@@ -440,12 +464,12 @@ function loadCartDraft(){
         title:p.title,
         barcode:p.barcode,
         price:Number(p.price),
-        qty:1
+        qty:addQty
       });
     }
 
     // Reduce ONLY local cached stock.
-    p.stock=availableStock-1;
+    p.stock=availableStock-addQty;
 
     const stockCell=document.querySelector(`[data-stock="${id}"]`);
     if(stockCell)stockCell.textContent=p.stock;
