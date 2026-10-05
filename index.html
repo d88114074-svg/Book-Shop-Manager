@@ -527,6 +527,205 @@ async function loadHistory(){
  }catch(e){$("historyTable").innerHTML="<p>Could not load sales history. Check Firestore rules and internet connection.</p>";message("Sales history: "+e.message,"error")}
 }
 $("refreshHistoryBtn").onclick=loadHistory;
+ async function loadSalesAnalysis(){
+ if(!db||!currentUser)return;
+
+ try{
+  const q=query(
+    collection(db,"sales"),
+    orderBy("createdAt","desc"),
+    limit(300)
+  );
+
+  const snap=await getDocs(q);
+  let rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+
+  const period=$("analysisPeriod").value;
+  const now=new Date();
+
+  if(period!=="all"){
+   let start=new Date(now);
+
+   if(period==="today"){
+    start.setHours(0,0,0,0);
+   }
+
+   if(period==="week"){
+    start.setDate(now.getDate()-6);
+    start.setHours(0,0,0,0);
+   }
+
+   if(period==="month"){
+    start=new Date(now.getFullYear(),now.getMonth(),1);
+   }
+
+   rows=rows.filter(s=>{
+    const d=s.createdAtLocal
+      ? new Date(s.createdAtLocal)
+      : (s.createdAt?.toDate ? s.createdAt.toDate() : null);
+
+    return d&&d>=start;
+   });
+  }
+
+  let totalSales=0;
+  let billCount=rows.length;
+  let itemsSold=0;
+  let estimatedProfit=0;
+
+  const productSales={};
+  const dailySales={};
+
+  rows.forEach(s=>{
+
+   totalSales+=Number(s.total||0);
+
+   (s.items||[]).forEach(item=>{
+
+    const qty=Number(item.qty||0);
+    const price=Number(item.price||0);
+    const cost=Number(item.cost||0);
+
+    itemsSold+=qty;
+
+    estimatedProfit+=(price-cost)*qty;
+
+    const name=item.title||item.name||item.barcode||"Unknown item";
+
+    if(!productSales[name])
+      productSales[name]=0;
+
+    productSales[name]+=qty;
+
+    const d=s.createdAtLocal
+      ? new Date(s.createdAtLocal)
+      : (s.createdAt?.toDate ? s.createdAt.toDate() : null);
+
+    if(d){
+     const key=d.toLocaleDateString("en-GB",{
+      day:"2-digit",
+      month:"short"
+     });
+
+     if(!dailySales[key])
+       dailySales[key]=0;
+
+     dailySales[key]+=price*qty;
+    }
+
+   });
+  });
+
+  $("analysisTotalSales").textContent=money(totalSales);
+  $("analysisBillCount").textContent=billCount;
+  $("analysisItemsSold").textContent=itemsSold;
+  $("analysisProfit").textContent=money(estimatedProfit);
+
+
+  /* SALES TREND */
+
+  const days=Object.entries(dailySales);
+
+  if(days.length){
+   const max=Math.max(...days.map(x=>x[1]),1);
+
+   $("salesTrendChart").innerHTML=`
+    <div style="display:flex;align-items:flex-end;gap:8px;height:260px;overflow-x:auto;padding:20px 5px 35px">
+     ${days.map(([day,value])=>`
+      <div style="min-width:55px;text-align:center">
+       <div style="
+        height:${Math.max(5,(value/max)*200)}px;
+        background:#0b5ed7;
+        border-radius:5px 5px 0 0;
+        margin:auto;
+        width:38px;
+       " title="${money(value)}"></div>
+       <div style="font-size:12px;margin-top:5px">${esc(day)}</div>
+       <div style="font-size:11px">${money(value)}</div>
+      </div>
+     `).join("")}
+    </div>
+   `;
+  }else{
+   $("salesTrendChart").innerHTML="<p>No sales found for this period.</p>";
+  }
+
+
+  /* TOP SELLING ITEMS */
+
+  const topItems=Object.entries(productSales)
+   .sort((a,b)=>b[1]-a[1])
+   .slice(0,10);
+
+  if(topItems.length){
+
+   const max=Math.max(...topItems.map(x=>x[1]),1);
+
+   $("topSellingChart").innerHTML=topItems.map(([name,qty])=>`
+    <div style="margin:12px 0">
+     <div class="row" style="justify-content:space-between">
+      <strong>${esc(name)}</strong>
+      <span>${qty} sold</span>
+     </div>
+
+     <div style="
+      height:20px;
+      background:#e9ecef;
+      border-radius:10px;
+      overflow:hidden;
+     ">
+      <div style="
+       width:${(qty/max)*100}%;
+       height:100%;
+       background:#0b5ed7;
+      "></div>
+     </div>
+    </div>
+   `).join("");
+
+  }else{
+   $("topSellingChart").innerHTML="<p>No items sold in this period.</p>";
+  }
+
+
+  /* LOW STOCK */
+
+  const productSnap=await getDocs(collection(db,"products"));
+
+  const lowStock=productSnap.docs
+   .map(d=>({id:d.id,...d.data()}))
+   .filter(p=>Number(p.stock||0)<=5)
+   .sort((a,b)=>Number(a.stock||0)-Number(b.stock||0));
+
+  $("lowStockAnalysis").innerHTML=lowStock.length
+   ? `<table>
+      <thead>
+       <tr>
+        <th>Item</th>
+        <th>Barcode</th>
+        <th>Stock</th>
+       </tr>
+      </thead>
+      <tbody>
+       ${lowStock.map(p=>`
+        <tr>
+         <td>${esc(p.title||"")}</td>
+         <td>${esc(p.barcode||"")}</td>
+         <td><strong>${Number(p.stock||0)}</strong></td>
+        </tr>
+       `).join("")}
+      </tbody>
+     </table>`
+   : "<p>No low-stock items.</p>";
+
+ }catch(e){
+  message("Sales analysis: "+e.message,"error");
+  console.error(e);
+ }
+}
+
+$("refreshAnalysisBtn").onclick=loadSalesAnalysis;
+$("analysisPeriod").onchange=loadSalesAnalysis;
 </script>
 </body>
 </html>
