@@ -271,7 +271,7 @@ async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!con
 
 async function searchBooks(){
  const term=$("bookSearch").value.trim().toLowerCase();if(!term)return;
- try{await loadProducts();let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
+ try{let matches=products.filter(p=>String(p.barcode||"").toLowerCase()===term);
  if(!matches.length)matches=products.filter(p=>(p.title+" "+(p.author||"")+" "+p.barcode).toLowerCase().includes(term)).slice(0,20);
  $("searchResults").innerHTML=matches.length?`<table><thead><tr><th>Book</th><th>Price</th><th>Stock</th><th></th></tr></thead><tbody>${matches.map(p=>`<tr><td>${esc(p.title)}<div class="muted">${esc(p.barcode)}</div></td><td>${money(p.price)}</td><td data-stock="${esc(p.id)}">${Number(p.stock)||0}</td><button data-add="${esc(p.id)}" ${Number(p.stock)<=0?"disabled":""}>Add</button></td></tr>`).join("")}</tbody></table>`:"<p>No matching books.</p>";
  $("searchResults").querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addToCart(b.dataset.add));
