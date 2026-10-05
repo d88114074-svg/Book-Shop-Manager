@@ -24,6 +24,41 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
  #receipt .line{border-top:1px dashed #000;margin:5px 0}
  .no-print{display:none!important}
 }
+
+ .quick-sale-box{
+  margin-top:12px;
+  padding:12px;
+  border:1px solid #ddd;
+  border-radius:10px;
+  background:#f8f9fa;
+}
+
+.quick-sale-title{
+  font-weight:bold;
+  margin-bottom:10px;
+}
+
+.quick-sale-items{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.quick-sale-btn{
+  flex:1 1 130px;
+  min-height:52px;
+  border:0;
+  border-radius:8px;
+  background:#0b5ed7;
+  color:white;
+  font-weight:bold;
+  padding:8px;
+  cursor:pointer;
+}
+
+.quick-sale-btn:active{
+  transform:scale(.97);
+}
 </style>
 </head>
 <body>
@@ -56,6 +91,10 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <div class="row"><input id="bookSearch" placeholder="Scan barcode, then press Enter" autocomplete="off"><button id="searchBtn" style="flex:0 0 110px">Search</button></div>
 <p class="muted">Most USB/Bluetooth barcode scanners act like a keyboard and send Enter after scanning. Tap this box before scanning.</p>
 <div id="searchResults" class="table-wrap"></div>
+ <div id="quickSaleBox" class="quick-sale-box">
+  <div class="quick-sale-title">⭐ Common Books</div>
+  <div id="quickSaleItems" class="quick-sale-items"></div>
+</div>
 </div>
 <div class="panel">
 <h2>Current bill</h2><div id="cartArea"></div>
@@ -73,8 +112,18 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <input type="hidden" id="productId">
 <div class="row"><div><label>Book title *</label><input id="pTitle" required maxlength="180"></div><div><label>ISBN / Barcode *</label><input id="pBarcode" required maxlength="80"></div></div>
 <div class="row"><div><label>Author</label><input id="pAuthor" maxlength="120"></div><div><label>Category</label><input id="pCategory" maxlength="80"></div></div>
-<div class="row"><div><label>Selling price (LKR) *</label><input id="pPrice" type="number" min="0" step="0.01" required></div><div><label>Purchase cost (LKR)</label><input id="pCost" type="number" min="0" step="0.01" value="0"></div><div><label>Opening / stock quantity *</label><input id="pStock" type="number" min="0" step="1" required></div></div>
-<div class="actions" style="margin-top:12px"><button type="submit">Save book</button><button type="button" id="cancelEditBtn" class="secondary">Cancel edit</button></div>
+<div class="row">
+<div><label>Selling price (LKR) *</label><input id="pPrice" type="number" min="0" step="0.01" required></div>
+<div><label>Purchase cost (LKR)</label><input id="pCost" type="number" min="0" step="0.01" value="0"></div>
+<div><label>Opening / stock quantity *</label><input id="pStock" type="number" min="0" step="1" required></div>
+</div>
+
+<div style="margin-top:10px">
+<label>
+<input type="checkbox" id="pQuickSale" style="width:auto">
+ ⭐ Common Book (show in Quick Sale)
+</label>
+</div><div class="actions" style="margin-top:12px"><button type="submit">Save book</button><button type="button" id="cancelEditBtn" class="secondary">Cancel edit</button></div>
 </form>
 </div>
 <div class="panel"><div class="row"><div><h2>Inventory</h2></div><div><input id="inventorySearch" placeholder="Filter title or barcode"></div><div style="flex:0 0 130px"><button id="refreshInventoryBtn" class="secondary">Refresh</button></div></div><div id="inventoryTable" class="table-wrap"></div></div>
@@ -241,8 +290,40 @@ document.querySelectorAll("[data-tab]").forEach(
  async function loadProducts(){
  const snap=await getDocs(collection(db,"products"));
  products=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.title||"").localeCompare(b.title||""));
- renderInventory();
+
+renderInventory();
+renderQuickSale();
 }
+function renderQuickSale(){
+  const box=$("quickSaleItems");
+  if(!box)return;
+
+  const quickBooks=products.filter(p=>p.quickSale===true).slice(0,5);
+
+  if(!quickBooks.length){
+    box.innerHTML='<div class="muted">No common books selected.</div>';
+    return;
+  }
+
+  box.innerHTML=quickBooks.map(p=>`
+    <button class="quick-sale-btn"
+      data-quick-add="${esc(p.id)}"
+      ${Number(p.stock)<=0?"disabled":""}>
+      ${esc(p.title)}
+      <div style="font-size:12px;font-weight:normal;margin-top:3px">
+        ${money(p.price)}
+      </div>
+    </button>
+  `).join("");
+
+  box.querySelectorAll("[data-quick-add]").forEach(b=>{
+    b.onclick=()=>{
+      addToCart(b.dataset.quickAdd);
+      renderQuickSale();
+    };
+  });
+}
+ 
 function renderInventory(){
  const term=($("inventorySearch").value||"").toLowerCase();
  const rows=products.filter(p=>(p.title+" "+p.barcode+" "+(p.author||"")).toLowerCase().includes(term));
@@ -256,7 +337,18 @@ $("refreshInventoryBtn").onclick=async()=>{try{await loadProducts();message("Inv
 $("productForm").addEventListener("submit",async e=>{
  e.preventDefault();if(currentRole!=="admin")return message("Admin access required.","error");
  const id=$("productId").value,barcode=$("pBarcode").value.trim();
- const item={title:$("pTitle").value.trim(),barcode,author:$("pAuthor").value.trim(),category:$("pCategory").value.trim(),price:Number($("pPrice").value),cost:Number($("pCost").value||0),stock:Number($("pStock").value),updatedAt:serverTimestamp(),updatedBy:currentUser.uid};
+ const item={
+  title:$("pTitle").value.trim(),
+  barcode,
+  author:$("pAuthor").value.trim(),
+  category:$("pCategory").value.trim(),
+  price:Number($("pPrice").value),
+  cost:Number($("pCost").value||0),
+  stock:Number($("pStock").value),
+  quickSale:$("pQuickSale").checked,
+  updatedAt:serverTimestamp(),
+  updatedBy:currentUser.uid
+};
  if(!item.title||!barcode||!Number.isFinite(item.price)||item.price<0||!Number.isInteger(item.stock)||item.stock<0||item.cost<0)return message("Check title, barcode, price, cost, and stock values.","error");
  try{
    const duplicate=products.find(p=>p.barcode===barcode&&p.id!==id);if(duplicate)return message("That barcode is already used by another book.","error");
@@ -264,8 +356,23 @@ $("productForm").addEventListener("submit",async e=>{
    resetProductForm();await loadProducts();message("Book saved.","success");
  }catch(err){message("Could not save book: "+err.message,"error")}
 });
-function editProduct(id){const p=products.find(x=>x.id===id);if(!p)return;$("productId").value=p.id;$("pTitle").value=p.title||"";$("pBarcode").value=p.barcode||"";$("pAuthor").value=p.author||"";$("pCategory").value=p.category||"";$("pPrice").value=p.price??0;$("pCost").value=p.cost??0;$("pStock").value=p.stock??0;$("productFormTitle").textContent="Edit book";$("productFormPanel").scrollIntoView({behavior:"smooth"})}
-function resetProductForm(){$("productForm").reset();$("productId").value="";$("pCost").value="0";$("productFormTitle").textContent="Add a book"}
+function editProduct(id){
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+
+  $("productId").value=p.id;
+  $("pTitle").value=p.title||"";
+  $("pBarcode").value=p.barcode||"";
+  $("pAuthor").value=p.author||"";
+  $("pCategory").value=p.category||"";
+  $("pPrice").value=p.price??0;
+  $("pCost").value=p.cost??0;
+  $("pStock").value=p.stock??0;
+  $("pQuickSale").checked=!!p.quickSale;
+
+  $("productFormTitle").textContent="Edit book";
+  $("productFormPanel").scrollIntoView({behavior:"smooth"});
+}function resetProductForm(){$("productForm").reset();$("productId").value="";$("pCost").value="0";$("productFormTitle").textContent="Add a book"}
 $("cancelEditBtn").onclick=resetProductForm;
 async function removeProduct(id){const p=products.find(x=>x.id===id);if(!p||!confirm(`Delete "${p.title}" from inventory? Past sales remain in history.`))return;try{await deleteDoc(doc(db,"products",id));await loadProducts();message("Book deleted.","success")}catch(e){message(e.message,"error")}}
 
