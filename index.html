@@ -481,33 +481,7 @@ async function searchBooks(){
   }
 }
 
-    addToCart(id,qty);
-    renderQuickSale();
-  };
-});
-   
-
-   // Exact barcode scan
-   const exact=matches.find(
-     p=>String(p.barcode||"").toLowerCase()===term
-   );
-  
-
-}
-   if(exact && Number(exact.stock)>=searchQty){
-     addToCart(exact.id,searchQty);
-
-     $("bookSearch").value="";
-     $("searchResults").innerHTML="";
-     $("searchQty").value=1;
-   }
-
- }catch(e){
-   message("Search failed: "+e.message,"error");
- }
-}
-
-
+    
 
  $("searchBtn").onclick=searchBooks;
 
