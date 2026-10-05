@@ -89,11 +89,7 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <h2>Find books</h2>
  <div style="margin-bottom:10px">
   <label>Quantity</label>
-  <div style="display:flex;gap:8px;align-items:center">
-    <input id="searchQty" type="number" min="1" step="1" value="1" style="max-width:120px">
-    <button id="addQtyBtn" type="button">Add Quantity</button>
-  </div>
-</div>
+  
 <label>Scan barcode or search by title / ISBN</label>
 <div class="row"><input id="bookSearch" placeholder="Scan barcode, then press Enter" autocomplete="off"><button id="searchBtn" style="flex:0 0 110px">Search</button></div>
 <p class="muted">Most USB/Bluetooth barcode scanners act like a keyboard and send Enter after scanning. Tap this box before scanning.</p>
@@ -427,15 +423,27 @@ async function searchBooks(){
              <td>${money(p.price)}</td>
 
              <td data-stock="${esc(p.id)}">
-               ${Number(p.stock)||0}
-             </td>
+  ${Number(p.stock)||0}
+</td>
 
-             <td>
-               <button
-                 data-add="${esc(p.id)}"
-                 ${Number(p.stock)<=0?"disabled":""}>
-                 Add
-               </button>
+<td>
+  <input
+    type="number"
+    min="1"
+    step="1"
+    value="1"
+    data-qty="${esc(p.id)}"
+    style="width:70px"
+  >
+</td>
+
+<td>
+  <button
+    data-add="${esc(p.id)}"
+    ${Number(p.stock)<=0?"disabled":""}>
+    Add
+  </button>
+</td>
 
                <br>
 
@@ -449,12 +457,22 @@ async function searchBooks(){
 
    // Add 1 copy
    $("searchResults").querySelectorAll("[data-add]").forEach(b=>{
-     b.onclick=()=>{
-       addToCart(b.dataset.add,1);
-       renderQuickSale();
-     };
-   });
+  b.onclick=()=>{
+    const id=b.dataset.add;
+    const qtyInput=$("searchResults").querySelector(
+      `[data-qty="${id}"]`
+    );
 
+    const qty=Number(qtyInput?.value)||1;
+
+    if(qty<1 || !Number.isInteger(qty)){
+      return message("Enter a valid quantity.","error");
+    }
+
+    addToCart(id,qty);
+    renderQuickSale();
+  };
+});
    
 
    // Exact barcode scan
@@ -462,8 +480,7 @@ async function searchBooks(){
      p=>String(p.barcode||"").toLowerCase()===term
    );
   
-if(matches.length){
-  $("addQtyBtn").dataset.bookId=matches[0].id;
+
 }
    if(exact && Number(exact.stock)>=searchQty){
      addToCart(exact.id,searchQty);
@@ -478,22 +495,8 @@ if(matches.length){
  }
 }
 
-$("addQtyBtn").onclick=()=>{
-  const id=$("addQtyBtn").dataset.bookId;
 
-  if(!id){
-    return message("Search a book first.","error");
-  }
 
-  const qty=Number($("searchQty").value)||1;
-
-  if(qty<1 || !Number.isInteger(qty)){
-    return message("Enter a valid quantity.","error");
-  }
-
-  addToCart(id,qty);
-  $("searchQty").value=1;
-};
  $("searchBtn").onclick=searchBooks;
 
 $("bookSearch").addEventListener("keydown",e=>{
