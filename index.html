@@ -376,7 +376,7 @@ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{
   renderCart();
   saveCartDraft();
 });
-
+ }
  function changeQty(id,delta){
   const line=cart.find(x=>x.id===id);
   const p=products.find(x=>x.id===id);
