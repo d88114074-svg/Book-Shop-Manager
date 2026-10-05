@@ -167,7 +167,6 @@ const firebaseConfig = {
 };
 
 const $ = id => document.getElementById(id);
- alert("JavaScript is running");
 const loginPanel=$("loginPanel"), appPanel=$("appPanel");
 let auth, db, currentUser=null, currentRole=null, products=[], cart=[], lastSale=null;
 let addingStock=false;let reducingStock=false;
@@ -345,7 +344,8 @@ function loadCartDraft(){
     if(stockCell)stockCell.textContent=p.stock;
 
     renderCart();
-    saveCartDraft();
+alert("Cart rendered: " + cart.length + " item(s)");
+saveCartDraft();
 
   }catch(e){
     message("Could not add book: "+e.message,"error");
