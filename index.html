@@ -89,7 +89,10 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <h2>Find books</h2>
  <div style="margin-bottom:10px">
   <label>Quantity</label>
-  <input id="searchQty" type="number" min="1" step="1" value="1" style="max-width:120px">
+  <div style="display:flex;gap:8px;align-items:center">
+    <input id="searchQty" type="number" min="1" step="1" value="1" style="max-width:120px">
+    <button id="addQtyBtn" type="button">Add Quantity</button>
+  </div>
 </div>
 <label>Scan barcode or search by title / ISBN</label>
 <div class="row"><input id="bookSearch" placeholder="Scan barcode, then press Enter" autocomplete="off"><button id="searchBtn" style="flex:0 0 110px">Search</button></div>
@@ -436,12 +439,7 @@ async function searchBooks(){
 
                <br>
 
-               <button
-                 data-add-qty="${esc(p.id)}"
-                 ${Number(p.stock)<searchQty?"disabled":""}
-                 style="margin-top:5px">
-                 Add ${searchQty}
-               </button>
+             
              </td>
            </tr>
          `).join("")}
@@ -457,19 +455,16 @@ async function searchBooks(){
      };
    });
 
-   // Add entered quantity
-   $("searchResults").querySelectorAll("[data-add-qty]").forEach(b=>{
-     b.onclick=()=>{
-       addToCart(b.dataset.addQty,searchQty);
-       renderQuickSale();
-     };
-   });
+   
 
    // Exact barcode scan
    const exact=matches.find(
      p=>String(p.barcode||"").toLowerCase()===term
    );
-
+  
+if(matches.length){
+  $("addQtyBtn").dataset.bookId=matches[0].id;
+}
    if(exact && Number(exact.stock)>=searchQty){
      addToCart(exact.id,searchQty);
 
@@ -483,7 +478,23 @@ async function searchBooks(){
  }
 }
 
-$("searchBtn").onclick=searchBooks;
+$("addQtyBtn").onclick=()=>{
+  const id=$("addQtyBtn").dataset.bookId;
+
+  if(!id){
+    return message("Search a book first.","error");
+  }
+
+  const qty=Number($("searchQty").value)||1;
+
+  if(qty<1 || !Number.isInteger(qty)){
+    return message("Enter a valid quantity.","error");
+  }
+
+  addToCart(id,qty);
+  $("searchQty").value=1;
+};
+ $("searchBtn").onclick=searchBooks;
 
 $("bookSearch").addEventListener("keydown",e=>{
  if(e.key==="Enter"){
