@@ -125,6 +125,7 @@ function initFirebase(){
      $("sessionInfo").textContent=user.email+" · "+currentRole;
      $("welcome").textContent="Signed in as "+user.email+" ("+currentRole+")";
      $("inventoryTab").classList.toggle("hidden",currentRole!=="admin");
+     $("salesTab").classList.toggle("hidden",currentRole!=="cashier");
      await loadProducts();
 loadCartDraft();
 renderCart();
@@ -139,7 +140,8 @@ try{initFirebase()}catch(e){showLoginMsg(e.message);}
 function switchTab(tab){
  for(const b of document.querySelectorAll("[data-tab]"))b.classList.toggle("active",b.dataset.tab===tab);
  $("salesView").classList.toggle("hidden",tab!=="sales");$("inventoryView").classList.toggle("hidden",tab!=="inventory");$("historyView").classList.toggle("hidden",tab!=="history");
- if(tab==="inventory"&&currentRole!=="admin"){message("Admin access required.","error");switchTab("sales");return}
+ if(tab==="inventory"&&currentRole!=="admin"){message("Admin access required.","error");switchTab("history");return}
+if(tab==="sales"&&currentRole!=="cashier"){message("Cashier access required.","error");switchTab("history");return}
  if(tab==="inventory")renderInventory();if(tab==="history")loadHistory();
 }
 document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
