@@ -344,7 +344,6 @@ function loadCartDraft(){
     if(stockCell)stockCell.textContent=p.stock;
 
     renderCart();
-alert("Cart rendered: " + cart.length + " item(s)");
 saveCartDraft();
 
   }catch(e){
@@ -376,6 +375,9 @@ $("cartArea").querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>{
   renderCart();
   saveCartDraft();
 });
+  $("billTotal").textContent=money(total);
+$("itemCount").textContent=count;
+updateChange();
  }
  function changeQty(id,delta){
   const line=cart.find(x=>x.id===id);
