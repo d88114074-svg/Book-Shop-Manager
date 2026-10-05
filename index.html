@@ -126,6 +126,7 @@ function initFirebase(){
      $("welcome").textContent="Signed in as "+user.email+" ("+currentRole+")";
      $("inventoryTab").classList.toggle("hidden",currentRole!=="admin");
      $("salesTab").classList.toggle("hidden",currentRole!=="cashier");
+     $("salesView").classList.toggle("hidden",currentRole!=="cashier");
      await loadProducts();
 loadCartDraft();
 renderCart();
