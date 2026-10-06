@@ -59,6 +59,49 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 .quick-sale-btn:active{
   transform:scale(.97);
 }
+ .receipt-popup{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.55);
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  z-index:9999;
+  padding:15px;
+}
+
+.receipt-popup-box{
+  background:#fff;
+  width:min(420px,100%);
+  max-height:90vh;
+  overflow:auto;
+  border-radius:12px;
+  padding:15px;
+  box-shadow:0 10px 40px rgba(0,0,0,.3);
+}
+
+.receipt-popup-title{
+  text-align:center;
+  font-size:20px;
+  font-weight:bold;
+  margin-bottom:12px;
+}
+
+.receipt-popup-content{
+  border:1px solid #ddd;
+  padding:10px;
+  background:#fff;
+}
+
+.receipt-popup-actions{
+  display:flex;
+  gap:10px;
+  margin-top:15px;
+}
+
+.receipt-popup-actions button{
+  flex:1;
+}
 </style>
 </head>
 <body>
@@ -807,9 +850,37 @@ function buildReceipt(s){
  $("receipt").classList.remove("hidden");
 }
 function showReceiptActions(){
- const panel=document.createElement("div");panel.className="panel no-print";panel.id="receiptActions";panel.innerHTML='<strong>Sale completed.</strong><p>Print the receipt on your thermal printer.</p><div class="actions"><button id="printReceiptBtn">Print receipt</button><button id="dismissReceiptBtn" class="secondary">Close receipt preview</button></div>';
- const old=$("receiptActions");if(old)old.remove();$("salesView").prepend(panel);
- $("printReceiptBtn").onclick=()=>window.print();$("dismissReceiptBtn").onclick=()=>{panel.remove();$("receipt").classList.add("hidden")};
+  const old=$("receiptPopup");
+  if(old) old.remove();
+
+  const popup=document.createElement("div");
+  popup.id="receiptPopup";
+  popup.className="receipt-popup";
+
+  popup.innerHTML=`
+    <div class="receipt-popup-box">
+      <div class="receipt-popup-title">🧾 Sale Completed</div>
+
+      <div class="receipt-popup-content">
+        ${$("receipt").innerHTML}
+      </div>
+
+      <div class="receipt-popup-actions">
+        <button id="printReceiptBtn">🖨️ Print Receipt</button>
+        <button id="dismissReceiptBtn" class="secondary">Close</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(popup);
+
+  $("printReceiptBtn").onclick=()=>{
+    window.print();
+  };
+
+  $("dismissReceiptBtn").onclick=()=>{
+    popup.remove();
+  };
 }
 async function loadHistory(){
  if(!db||!currentUser)return;
