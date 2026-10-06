@@ -1115,6 +1115,7 @@ $("refreshHistoryBtn").onclick=loadHistory;
         <th>Item</th>
         <th>Barcode</th>
         <th>Stock</th>
+<th>Alert at</th>
        </tr>
       </thead>
       <tbody>
@@ -1123,6 +1124,7 @@ $("refreshHistoryBtn").onclick=loadHistory;
          <td>${esc(p.title||"")}</td>
          <td>${esc(p.barcode||"")}</td>
          <td><strong>${Number(p.stock||0)}</strong></td>
+         <td>${Number(p.lowStockAlert??5)}</td>
         </tr>
        `).join("")}
       </tbody>
