@@ -102,6 +102,25 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 .receipt-popup-actions button{
   flex:1;
 }
+
+ #lowStockBulb{
+  font-size:28px;
+  color:#dc3545;
+  animation:stockBulbBlink 0.7s infinite;
+  text-shadow:0 0 8px #dc3545;
+}
+
+@keyframes stockBulbBlink{
+  0%,100%{
+    opacity:1;
+    transform:scale(1);
+  }
+  50%{
+    opacity:0.25;
+    transform:scale(1.15);
+  }
+}
+
 </style>
 </head>
 <body>
@@ -234,7 +253,11 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 </div>
 
 <div class="panel">
-  <h2>📦 Stock alerts</h2>
+  <div class="row" style="align-items:center">
+    <h2 style="margin:0">📦 Stock alerts</h2>
+    <span id="lowStockBulb" class="hidden" title="Low stock alert">💡</span>
+  </div>
+
   <div id="lowStockAnalysis" class="table-wrap"></div>
 </div>
 
@@ -1064,6 +1087,8 @@ $("refreshHistoryBtn").onclick=loadHistory;
    .map(d=>({id:d.id,...d.data()}))
    .filter(p=>Number(p.stock||0)<=5)
    .sort((a,b)=>Number(a.stock||0)-Number(b.stock||0));
+
+  $("lowStockBulb").classList.toggle("hidden",lowStock.length===0);
 
   $("lowStockAnalysis").innerHTML=lowStock.length
    ? `<table>
