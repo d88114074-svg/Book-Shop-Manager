@@ -177,9 +177,25 @@ header h1{font-size:20px;margin:0}main{max-width:1200px;margin:18px auto;padding
 <div class="row"><div><label>Book title *</label><input id="pTitle" required maxlength="180"></div><div><label>ISBN / Barcode *</label><input id="pBarcode" required maxlength="80"></div></div>
 <div class="row"><div><label>Author</label><input id="pAuthor" maxlength="120"></div><div><label>Category</label><input id="pCategory" maxlength="80"></div></div>
 <div class="row">
-<div><label>Selling price (LKR) *</label><input id="pPrice" type="number" min="0" step="0.01" required></div>
-<div><label>Purchase cost (LKR)</label><input id="pCost" type="number" min="0" step="0.01" value="0"></div>
-<div><label>Opening / stock quantity *</label><input id="pStock" type="number" min="0" step="1" required></div>
+  <div>
+    <label>Selling price (LKR) *</label>
+    <input id="pPrice" type="number" min="0" step="0.01" required>
+  </div>
+
+  <div>
+    <label>Purchase cost (LKR)</label>
+    <input id="pCost" type="number" min="0" step="0.01" value="0">
+  </div>
+
+  <div>
+    <label>Opening / stock quantity *</label>
+    <input id="pStock" type="number" min="0" step="1" required>
+  </div>
+
+  <div>
+    <label>Low-stock alert at</label>
+    <input id="pLowStock" type="number" min="0" step="1" value="5">
+  </div>
 </div>
 
 <div style="margin-top:10px">
@@ -413,7 +429,8 @@ $("productForm").addEventListener("submit",async e=>{
   price:Number($("pPrice").value),
   cost:Number($("pCost").value||0),
   stock:Number($("pStock").value),
-  quickSale:$("pQuickSale").checked,
+lowStockAlert:Number($("pLowStock").value||5),
+quickSale:$("pQuickSale").checked,
   updatedAt:serverTimestamp(),
   updatedBy:currentUser.uid
 };
@@ -436,6 +453,7 @@ function editProduct(id){
   $("pPrice").value=p.price??0;
   $("pCost").value=p.cost??0;
   $("pStock").value=p.stock??0;
+  $("pLowStock").value=p.lowStockAlert??5; 
   $("pQuickSale").checked=!!p.quickSale;
 
   $("productFormTitle").textContent="Edit book";
@@ -1085,7 +1103,7 @@ $("refreshHistoryBtn").onclick=loadHistory;
 
   const lowStock=productSnap.docs
    .map(d=>({id:d.id,...d.data()}))
-   .filter(p=>Number(p.stock||0)<=5)
+   .filter(p=>Number(p.stock||0)<=Number(p.lowStockAlert??5))
    .sort((a,b)=>Number(a.stock||0)-Number(b.stock||0));
 
   $("lowStockBulb").classList.toggle("hidden",lowStock.length===0);
