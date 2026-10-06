@@ -328,6 +328,8 @@ function initFirebase(){
 loadCartDraft();
 renderCart();
 await loadHistory();
+
+if(currentRole==="admin") switchTab("analysis");
    }catch(e){message("Sign-in setup error: "+e.message,"error")}
  });
 }
